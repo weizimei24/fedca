@@ -1,0 +1,28 @@
+# FedFH (fixed-rank federated functional harmonization). Same zsRE split,
+# model, seed, rounds, optimizer and rank-8 LoRA budget as FedIT/FlexLoRA.
+alg: fedfh
+suffix: zsre8_chat_eos_v2/fedfh
+device: 0
+dataset: zsre
+model: Qwen3-1.7B
+task_type: CAUSAL_LM
+seed: 42
+deterministic: true
+cn: 8
+sr: 1.0
+rnd: 10
+test_gap: 1
+bs: 1
+grad_accum: 8
+epoch: 1
+step: 63
+lr: 0.0001
+mode: prototype
+lora_rank: 8
+lora_alpha: 32
+lora_dropout: 0.05
+# FedFH-specific
+fh_gamma: 0.1        # lambda = fh_gamma * mean eigenvalue of each layer's input moment
+fh_k: 32             # eigenpairs uploaded per decoder layer (shared by q_proj and v_proj)
+fh_stat_bs: 16       # batch size of the gradient-free geometry pass
+fh_server_device: auto

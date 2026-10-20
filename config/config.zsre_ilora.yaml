@@ -1,0 +1,22 @@
+# Homogeneous rank-8 project ILoRA baseline; no ILoRA-S control variates.
+alg: ilora
+suffix: zsre8_chat_eos_v2/ilora
+device: 0
+dataset: zsre
+model: Qwen3-1.7B
+task_type: CAUSAL_LM
+seed: 42
+deterministic: true
+cn: 8
+sr: 1.0
+rnd: 10
+test_gap: 1
+bs: 1
+grad_accum: 8
+epoch: 1
+step: 63
+lr: 0.0001
+mode: prototype
+lora_rank: 8
+lora_alpha: 32
+lora_dropout: 0.05

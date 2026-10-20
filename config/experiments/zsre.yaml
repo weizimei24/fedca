@@ -1,0 +1,5 @@
+extends: defaults.yaml
+task: zsre
+dataset: zsre
+max_length: 512
+max_new_tokens: 32

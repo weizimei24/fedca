@@ -1,0 +1,23 @@
+# Install with tools/install_commonsense_eval.py into .runtime/lm_eval.
+# --no-deps deliberately preserves the existing torch/transformers environment.
+lm_eval==0.4.13
+evaluate==0.4.6
+more_itertools==11.2.1
+sacrebleu==2.6.0
+sqlitedict==2.1.0
+word2number==1.1
+pytablewriter==1.2.1
+zstandard==0.25.0
+immutabledict==4.3.1
+jsonlines==4.0.0
+numexpr==2.14.2
+DataProperty==1.1.1
+mbstrdecoder==1.1.5
+pathvalidate==3.3.1
+tabledata==1.3.5
+tcolorpy==0.1.7
+typepy==2.0.0
+portalocker==4.4.1
+tabulate==0.10.0
+colorama==0.4.6
+lxml==6.1.3

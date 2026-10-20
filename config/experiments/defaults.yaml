@@ -1,0 +1,46 @@
+# Common runtime/training settings. Dataset files override only data/protocol needs.
+runtime: shared
+model: Qwen3-1.7B
+device: 0
+alg: fedit
+suffix: default
+task_type: CAUSAL_LM
+mode: prototype
+seed: 42
+deterministic: true
+cn: null  # Infer client count from data; centralized uses one pooled client.
+sr: 1.0
+rnd: 30
+test_gap: 5
+bs: 1
+grad_accum: 8
+epoch: 1
+# Zero means all configured local epochs in the shared runtime.
+step: 0
+lr: 0.0001
+lora_rank: 8
+lora_alpha: 32
+lora_dropout: 0.05
+gradient_checkpointing: true
+commonsense: false
+global_test: false
+cross_domain_qa: false
+eval_batch_size: 1
+eval_max_length: 4096
+max_length: 1536
+max_new_tokens: 1024
+checkpoint_steps: 25
+resume: auto
+lam: 0.5
+residual_threshold: 0.9999
+ca_lambda: 1.0
+ca_tau: 1.0
+ca_eta_mode: probe
+ca_eta: 1.0
+ca_eta_grid: "1,1.5,2,3,4,6,8"
+ca_kappa: .inf
+ca_beta: 0.0
+ca_probe_size: 32
+ca_probe_bs: 1
+ca_probe_diag: false
+ca_save_every: 0

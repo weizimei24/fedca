@@ -1,0 +1,57 @@
+# Evaluation configuration: dataset -> task_type + metrics
+# task_type: SEQ_CLS | CAUSAL_LM
+
+datasets:
+  sst2:
+    task_type: SEQ_CLS
+    metrics: [accuracy]
+
+  imdb:
+    task_type: SEQ_CLS
+    metrics: [accuracy]
+
+  gsm8k:
+    task_type: CAUSAL_LM
+    metrics: [exact_match, f1, perplexity, mmlu]
+
+  squad_v1:
+    task_type: CAUSAL_LM
+    metrics: [exact_match, f1, perplexity]
+
+  squad_v1_fed5:
+    task_type: CAUSAL_LM
+    metrics: [exact_match, f1, perplexity]
+
+  cross_domain_mrqa:
+    task_type: CAUSAL_LM
+    metrics: [exact_match, f1]
+
+  zsre:
+    task_type: CAUSAL_LM
+    metrics: [exact_match, f1, containment]
+
+  dolly:
+    task_type: CAUSAL_LM
+    metrics: [perplexity, rouge, f1, mmlu]
+
+  alpaca:
+    task_type: CAUSAL_LM
+    metrics: [perplexity, mmlu]
+
+  sensorqa:
+    task_type: CAUSAL_LM
+    metrics: [perplexity, rouge]
+
+  homebench:
+    task_type: CAUSAL_LM
+    metrics: [perplexity, f1]
+
+
+# Global generation settings
+final_eval_batch_size: 8 # batch size for model.generate() during final evaluation
+
+# Global benchmarks — MMLU config (activated by adding 'mmlu' to a dataset's metrics)
+global_benchmarks:
+  mmlu:
+    n_shot: 5             # few-shot examples per subject
+    max_per_subject: 100  # max test samples per subject (0 = full)

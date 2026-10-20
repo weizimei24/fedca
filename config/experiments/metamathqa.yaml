@@ -1,0 +1,7 @@
+extends: defaults.yaml
+task: metamathqa
+dataset: metamathqa_client4000_seed42
+# Full reasoning is retained; preflight rejects samples exceeding this budget.
+max_length: 8192
+eval_max_length: 8192
+max_new_tokens: 2048

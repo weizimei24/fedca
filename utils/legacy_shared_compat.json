@@ -1,0 +1,85 @@
+{
+  "format": "reviewed_legacy_shared_refactor_v1",
+  "sources": {
+    "main.py": {
+      "before": "8a08cd63c742fff2706a49bfba3637e36cc569ce2aff058040dbba3be0ca3850",
+      "after": "db6769f664d26dce7c9d3ab7506ca8e9a58bdd4b2e20b25e563b46e2543f7ab7"
+    },
+    "utils/options.py": {
+      "before": "73a8fc3dec045133c58388b3f41b8e21700fab0672a934b077b5b8d9110e60d4",
+      "after": "ede86c3e407e7ec1d076420388dc81c4e270357bb512008e58e18addc941e3de",
+      "compatible_before": [
+        "eebe13fa2558de9cf93c3c7858a852c2cffd3c825fb7f01d224146aa3e345ba2"
+      ]
+    },
+    "utils/data_utils.py": {
+      "before": "8b0b98326f0c245b7314dfbaf08151797798fcd145cf6ab7dcd751359426da1f",
+      "after": "83b7ddb9755e165a974e3076685cf25c36423f5db132110acaf220ef8b3374e6"
+    },
+    "utils/train_utils.py": {
+      "before": "125693534b343c543a363c45a04a0b913a541271701c56df39aad74f1520bb6e",
+      "after": "6aaf40f1ba90a70c96ec281eb2c6dab0d206a6b91dd16131f5fd833b1c3ec702"
+    },
+    "utils/model_utils.py": {
+      "before": "e88fe017d859cb746e327defcecfc5a33a86d86df0e991fa832e08b8ab30929b",
+      "after": "37d22c477ad32d559c2199be93d33ce744e5f947038e5cbd807715d27031afa9",
+      "compatible_before": [
+        "51c52ccd4627297771fd42a6d898c823ad061433a47696f36555ccbf015eea54",
+        "583d801d026c4e540d787021090f373cf69e5b32dce0f6119a40272962ae21cd"
+      ]
+    },
+    "alg/ftbase.py": {
+      "before": "74a6ad4a4044877c5ee8ea01fdd76ad829156fbd3d8d9a8d4bcb881d09379b28",
+      "after": "549961da009dae6955843461308c1d265a0d27b402f67598290954a841fb5566"
+    },
+    "alg/centralized.py": {
+      "before": "14faf30dc5210105809d58008d6f6bea36bdae31fbacd46c3616ff7c6808aa81",
+      "after": "039deb67f1040cb012c196ff9502314fcb778b15808985de927ecf72c6a71bfb"
+    },
+    "alg/localonly.py": {
+      "before": "5b2b503d35e0424b0cb8a50c308abdab02a158a214e39d7faadd16dcf090a324",
+      "after": "e3aa73ae36171e46e56fed24f3aab9b10d31ee3790783bb159b03d5dfe612153",
+      "compatible_before": [
+        "81c52ca62b89dca13d8ef4967f284e8f2bc81a36b6c06e576aabb3a40ac37761"
+      ]
+    },
+    "alg/fedca.py": {
+      "before": "896882ea216722cde58150e2c3117258ffcab924f12d0a53ea2074f7db0cf40c",
+      "after": "387cee1036289664ad9160492502a264547aed843c90acaff19b684838bb287c"
+    },
+    "utils/ca_utils.py": {
+      "before": "72a202461e68be0c8e16a4062667e6c34c522f302ea16264d0b82272c89316f9",
+      "after": "558bb745b5b8aed5f3617e64c97a1b8ae772919ba4aad93a6da1a34feaf539aa"
+    },
+    "utils/commonsense_training.py": {
+      "before": "4716a7364cdd22c698545da898d192d6a98f4d73fac109ea094d411e71e4488b",
+      "after": "4cbec5418e6161e7a5e247837e2470f7659d4b1ab9f1e56a635ddd217f869444"
+    },
+    "utils/commonsense_framework.py": {
+      "before": "b813e7ec3e46cac88aeb642351e994944ea919b2312ba8f36f63849b5255939b",
+      "after": "7a99131b034a5165dc0c56e78be35af30d7a2786ffd5a24d095b41cead041283"
+    },
+    "utils/commonsense_fedca.py": {
+      "before": "b10a5321c821f628a0fbef7d03241c3c176cb389f6bba72dfeda6448cde6ba3e",
+      "after": "3bb2c686f1d29ad8ad6de86044022d40ce91bb9fde3a198950317c345a2289a7",
+      "compatible_before": [
+        "64a3560cdc5632a794e0d5680a1c03b88e5ae4fe72a4f5d45d6ec543b28a08d0"
+      ]
+    },
+    "utils/seed_utils.py": {
+      "before": "ecef05a59bb8a794ddbb7d680244b01fdf5386e9b116c3f2172d28b2a702bf26",
+      "after": "ecef05a59bb8a794ddbb7d680244b01fdf5386e9b116c3f2172d28b2a702bf26"
+    },
+    "alg/fedit.py": {
+      "before": "9f24402acba93bf19d97da2ba60628ec3d67e2d75e1e0b5ef712f965818fd722",
+      "after": "9f24402acba93bf19d97da2ba60628ec3d67e2d75e1e0b5ef712f965818fd722"
+    }
+  },
+  "dependencies": {
+    "utils/runtime_utils.py": "56545024cc51f2fff92a005e15154db9793daf8f9f5a109e62f2f78212ff4ba8",
+    "utils/experiment.py": "a1d19f79f8b2da3f93b28b7f87e6a61293f0a73a72388345dfbd4f965f4f1ee0",
+    "utils/dataset_adapters.py": "4b8309e22a77472d88939b6411f0b813ffd1de58aa25bc991c83293c46b274a2",
+    "utils/evaluation_adapters.py": "6b46898955febe396ca14ca40189f0efae230d718c8892451e02668d6810f0af",
+    "utils/method_state.py": "9e422923b6ad0916981372675782e5c28d98ab97d0b443fbb27314ee137186fd"
+  }
+}

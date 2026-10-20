@@ -1,0 +1,61 @@
+# Use as /.gitignore in the NEW code-only repository.
+# Copy only the files in upload-code-only-manifest.json first.
+/data/
+/exp/
+/results/
+/models/
+/model/
+/weights/
+/checkpoints/
+/adapters/
+/Qwen3-1.7B/
+/.runtime/
+/logs/
+/wandb/
+/runs/
+
+# dataset/ contains ONLY these source scripts; never include prepared data.
+/dataset/**
+!/dataset/__init__.py
+!/dataset/download_zsre.py
+!/dataset/process_zsre.py
+!/dataset/build_zsre_pooled.py
+!/dataset/validate_zsre.py
+!/dataset/check_zsre_protocol.py
+!/dataset/smoke_zsre.py
+
+# Model, adapter and optimizer state, including files outside standard folders.
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.gguf
+*.onnx
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.parquet
+*.arrow
+*.jsonl
+*.log
+
+# Local caches, environments, editor settings and credentials.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.hf_cache/
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Do not ignore all JSON files: utils/legacy_shared_compat.json is source metadata.

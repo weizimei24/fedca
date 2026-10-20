@@ -1,0 +1,36 @@
+# FedCA (compatibility-aware absorption). Same zsRE split, model, seed, rounds,
+# optimizer, local steps and rank-8 q/v LoRA budget as FedIT / FlexLoRA / FedFH.
+# With ca_lambda: 0, ca_eta_mode: fixed, ca_eta: 1 this run is FedIT exactly.
+alg: fedca
+suffix: zsre8_chat_eos_v2/fedca
+device: 0
+dataset: zsre
+model: Qwen3-1.7B
+task_type: CAUSAL_LM
+seed: 42
+deterministic: true
+cn: 8
+sr: 1.0
+rnd: 10
+test_gap: 1
+bs: 1
+grad_accum: 8
+epoch: 1
+step: 63
+lr: 0.0001
+mode: prototype
+lora_rank: 8
+lora_alpha: 32
+lora_dropout: 0.05
+# --- FedCA ---
+ca_lambda: 1.0          # step 2: weight of the not-true KL to the global teacher
+ca_tau: 1.0             # temperature of that KL
+ca_eta_mode: probe      # step 3: probe | fixed | fedexp
+ca_eta: 1.0             # used only when ca_eta_mode: fixed
+ca_eta_grid: "1,1.5,2,3,4,6,8"
+ca_kappa: inf           # optional guard: absorbed excess <= kappa * mean local excess (inf = gain only)
+ca_beta: 0.0            # per-client compatibility tilt of absorption weights (0 = data size)
+ca_probe_size: 32       # fixed training rows per client used to score candidate steps
+ca_probe_bs: 4           # probe forward batch (no grad); lower if GPU memory is tight
+ca_probe_diag: false
+ca_save_every: 1        # keep every completed round for the EM curve
