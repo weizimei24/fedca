@@ -31,7 +31,9 @@ main.FedSim
 | `flexlora` | 乘积空间的小核心 SVD；当前使用同质 rank |
 | `fedmomentum` | 低秩聚合的主成分留在 LoRA、能量阈值内残差写回基础层 |
 
-`fedmomentum` 是本仓库的残差回写实现，不是经典 FedAvgM。2026-10-21 改用与 FlexLoRA 共用的 QR 小核心精确 SVD，去掉稠密更新和随机 sketch。它会改变浮点路径和 RNG 消耗，旧版本实验须使用原代码继续；不能将两种实现的实验当作完全相同的运行。
+各论文方法保留原有算法流程，必要修复限于无法运行、缩放/形状错误、状态缺失等问题。公共的冻结参数配置只复用原有参数选择规则，不改变各方法聚合公式。
+
+`fedmomentum` 是本仓库的残差回写实现，不是经典 FedAvgM；这里不额外声称与某篇论文已完全对齐。保留原来的稠密更新、随机 sketch、QR 和 SVD，以及能量阈值和残差回写。此前替换为 FlexLoRA 小核心精确 SVD 的修改已撤回，FlexLoRA 的分解例程也恢复原版。该撤回仍改变了上一版的代码身份；已运行的 shared 实验使用其对应版本续训。
 
 ## FedCA
 
@@ -51,13 +53,15 @@ FedExP          --ca_lambda 0 --ca_eta_mode fedexp
 
 ## 三种任务的评估
 
-**Commonsense170K：** 主协议为 `commonsense_chat_generation_plus_native_v2`。生成提示与训练相同，读取 `test/<client>.jsonl`，非 thinking chat、greedy、默认最多生成 32 token。提取 `true/false`、`solution1`、`answer1` 等该题允许的答案词，以完整 token 边界匹配；缺失或歧义答案判错。主要指标为八个来源的 `generation_accuracy` 宏平均，每个来源等权。
+**Commonsense170K：** 主协议为 `commonsense_chat_generation_plus_native_v3`。生成提示与训练相同，读取 `test/<client>.jsonl`，非 thinking chat、greedy、默认最多生成 32 token。提取 `true/false`、`solution1`、`answer1` 等该题允许的答案词，以完整 token 边界匹配；明确答案语句后采用文本中第一个合法标签，没有明确语句时必须只有一种合法标签，否则判错。主要指标为八个来源的 `generation_accuracy` 宏平均，每个来源等权。`answer` 标记不会拆开 `answer1` 等完整标签。
 
-同一轮还读取 `benchmarks/<domain>.jsonl`，运行固定 `lm_eval==0.4.13` 的原生 0-shot 选择题评估，不包 chat，记录补充指标 `native_mc_raw_accuracy`。两者有不同任务名、数据文件、协议和指标，不能把生成准确率与旧的原生选择题分数直接混比。可用 `--commonsense_eval native` 将原生指标设为主指标，两种评估仍保留。`--commonsense_max_new_tokens` 单独控制生成答案的预算。
+补充评估读取 `benchmarks/<domain>.jsonl`，运行固定 `lm_eval==0.4.13` 的原生 0-shot 选择题评估，不包 chat，记录 `native_mc_raw_accuracy`。`--commonsense_native_eval` 控制执行时机：`never` 不执行，`last` 仅在本次训练目标 `rnd` 对应的最后一轮执行（默认），`always` 每个评估轮次均执行。只评估历史轮次时也遵守这个规则；按需补跑需显式使用 `always`。生成评估仍按 `test_gap` 和最后一轮执行。
+
+两者有不同任务名、数据文件、协议和指标，不能把生成准确率与旧的原生选择题分数直接混比。用 `--commonsense_eval native --commonsense_native_eval always` 可将原生指标设为主指标。选择 `never` 时不要求 harness，支持只有生成测试文件的无 manifest 数据；若存在完整 manifest，仍校验其全部产物。切换开关时，相同本地数据保持相同训练身份，评估缓存则记录实际执行的任务及开关，避免复用不完整的补充指标。
 
 **zsRE：** 保留非 thinking 短答案 chat、greedy 和默认 32-token 预算，记录 EM/F1/containment。共享结果为 0–1 比例；旧独立 `eval_zsre.py` 的相关分数仍为百分数。
 
-**MetaMathQA：** 协议为 `math_chat_greedy_training_prompt_v3`。评估 user 内容与训练一致，不额外添加 boxed 指令；接受 boxed 和 `The answer is: ...` 等明确结尾。GSM8K 进行精确数值/分数比较，MATH 使用固定 harness 的字符串规范化比较。该评分不提供任意符号等价证明。主指标为 GSM8K 和 MATH exact match 的宏平均，同时保存各自分数。
+**MetaMathQA：** 协议为 `math_chat_greedy_training_prompt_v4`。评估 user 内容与训练一致，不额外添加 boxed 指令；接受 boxed 和 `The answer is: ...` 等明确结尾，包括 `$18$.` 这种数学定界符后带句号的形式。GSM8K 进行精确数值/分数比较，MATH 使用固定 harness 的字符串规范化比较。该评分不提供任意符号等价证明。主指标为 GSM8K 和 MATH exact match 的宏平均，同时保存各自分数。
 
 Local-only 的常识和 zsRE 模型评估对应的来源/客户端测试集；数学每个客户端评估 GSM8K 和 MATH。它与全局模型覆盖全部任务的范围不同，结果保留客户端标识。
 

@@ -3,3 +3,4 @@ task: commonsense170k
 dataset: commonsense170k_client1000_seed42
 commonsense_eval: generation
 commonsense_max_new_tokens: 32
+commonsense_native_eval: last

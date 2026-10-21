@@ -10,7 +10,8 @@ from utils.dataset_adapters import read_rows
 
 
 def validate_evaluator(adapter, tasks):
-    if adapter.name in ('commonsense170k', 'metamathqa'):
+    if adapter.name == 'metamathqa' or (adapter.name == 'commonsense170k' and
+            any(name.startswith('native_') for name, _, _ in tasks)):
         from utils.commonsense_eval import ensure_runtime
         ensure_runtime()
     if adapter.name == 'commonsense170k':
@@ -54,7 +55,12 @@ def boxed_answer(text):
 
 
 def numeric_answer(text):
-    text = str(text).strip().strip('$').strip().rstrip('.')
+    text = str(text).strip()
+    while True:
+        stripped = text.rstrip('.').strip().strip('$').strip()
+        if stripped == text:
+            break
+        text = stripped
     text = text.replace('−', '-').replace(',', '')
     text = re.sub(r'\\(?:dfrac|tfrac)', r'\\frac', text)
     fraction = re.fullmatch(r'(-?)\\frac\{\s*([+-]?\d+)\s*\}\{\s*([+-]?\d+)\s*\}', text)
@@ -144,16 +150,20 @@ def generate_math(model, tokenizer, rows, task, args):
 
 
 def commonsense_answer(text, labels):
-    """Extract one whole answer token; ambiguous or missing tokens are wrong.
+    """Match whole labels, choosing the first after an explicit answer marker.
 
     Prefer the final explicit answer statement so option words occurring in
     reasoning cannot override it. Never use the gold answer for extraction.
     """
-    explicit = list(re.finditer(r'(?:the (?:correct |final )?answer is|final answer|answer)\s*:?\s*([^\n]+)', text, re.I))
+    explicit = list(re.finditer(r'\b(?:the (?:correct |final )?answer is|final answer|answer(?!\w))\s*:?\s*([^\n]+)', text, re.I))
     candidate = explicit[-1].group(1) if explicit else text
-    found = [label for label in labels if re.search(
-        r'(?<!\w)' + re.escape(str(label)) + r'(?!\w)', candidate, re.I)]
-    return found[0] if len(found) == 1 else None
+    hits = sorted((match.start(), label) for label in labels
+        for match in [re.search(r'(?<!\w)' + re.escape(str(label)) + r'(?!\w)', candidate, re.I)] if match)
+    if not hits:
+        return None
+    if explicit:
+        return hits[0][1]
+    return hits[0][1] if len({label for _, label in hits}) == 1 else None
 
 
 def generate_commonsense(model, tokenizer, rows, args):
@@ -187,7 +197,7 @@ def generate_commonsense(model, tokenizer, rows, args):
         tokenizer.padding_side = original_padding
     return {'metrics': {'generation_accuracy': sum(row['correct'] for row in predictions) / len(predictions)},
             'num_samples': len(predictions), 'predictions': predictions,
-            'protocol': 'commonsense_chat_generation_v1'}
+            'protocol': 'commonsense_chat_generation_v2'}
 
 
 def evaluate_task(adapter, model, tokenizer, name, path, args):

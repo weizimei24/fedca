@@ -60,6 +60,10 @@ def prepare_experiment(args):
         raise ValueError('resume must be auto or never')
     if args.commonsense_eval not in ('generation', 'native'):
         raise ValueError('commonsense_eval must be generation or native')
+    if args.commonsense_native_eval not in ('never', 'last', 'always'):
+        raise ValueError('commonsense_native_eval must be never, last or always')
+    if args.task == 'commonsense170k' and args.commonsense_eval == 'native' and args.commonsense_native_eval != 'always':
+        raise ValueError('Native primary metric requires --commonsense_native_eval always')
     evaluation_rounds(args)
     spec = method_spec(args.alg)
     validate_method(args)
@@ -78,10 +82,9 @@ def prepare_experiment(args):
         'utils/experiment.py', 'utils/runtime_utils.py', 'utils/dataset_adapters.py',
         'utils/method_state.py', 'utils/train_utils.py', 'utils/data_utils.py',
         'utils/model_utils.py', 'utils/seed_utils.py', 'utils/options.py']
-    if args.alg in ('fedca', 'fedsvd', 'fedfh', 'fedmomentum'):
+    if args.alg in ('fedca', 'fedsvd', 'fedfh'):
         sources += {'fedca': ['utils/ca_utils.py'], 'fedsvd': ['alg/flexlora.py'],
-                    'fedfh': ['utils/fh_utils.py', 'alg/flexlora.py'],
-                    'fedmomentum': ['alg/flexlora.py']}[args.alg]
+                    'fedfh': ['utils/fh_utils.py', 'alg/flexlora.py']}[args.alg]
     if prepared['adapter'].name == 'zsre':
         sources += ['utils/zsre_utils.py']
     identity_spec = {'protocol': PROTOCOL, 'training': settings,
@@ -280,21 +283,27 @@ class ExperimentRun:
         if snapshot['identity'] != self.identity or snapshot['round'] != round_number:
             raise ValueError('Evaluation snapshot metadata differs')
         adapter = self.prepared['adapter']
+        tasks = adapter.scheduled_tasks(self.prepared['tasks'], round_number, self.args)
         settings = {'identity': self.identity, 'round': round_number, 'snapshot_sha256': meta['sha256'],
             'protocol': adapter.evaluator, 'eval_limit': self.args.eval_limit,
             'batch_size': self.args.eval_batch_size, 'max_length': self.args.eval_max_length,
             'max_new_tokens': self.args.max_new_tokens, 'seed': self.args.seed,
             'primary_metric': adapter.primary_metric,
             'commonsense_max_new_tokens': self.args.commonsense_max_new_tokens,
+            'commonsense_native_eval': self.args.commonsense_native_eval,
+            'included_native_tasks': any(name.startswith('native_') for name, _, _ in tasks),
             'implementation': {name: source_sha256(ROOT / name) for name in
                 ('utils/evaluation_adapters.py', 'utils/commonsense_eval.py', 'eval_zsre.py', 'utils/zsre_utils.py')}}
-        settings['evaluator_packages'] = {name: importlib.metadata.version(name) for name in adapter.evaluator_packages}
+        packages = adapter.evaluator_packages
+        if adapter.name == 'commonsense170k' and not settings['included_native_tasks']:
+            packages = ()
+        settings['evaluator_packages'] = {name: importlib.metadata.version(name) for name in packages}
         evaluation_id = fingerprint(settings)
         output = self.output / 'evaluation' / f'round_{round_number:03d}' / evaluation_id[:16]
         before, rng, training = self.server.export_state(), capture_rng(), self.server.model.training
         results = {}
         try:
-            for name, data_path, cid in self.prepared['tasks']:
+            for name, data_path, cid in tasks:
                 key = fingerprint({**settings, 'task': name, 'data_sha256': sha256(data_path)})
                 dest = output / f'{name}.json'
                 if dest.exists():

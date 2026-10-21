@@ -5,20 +5,15 @@ import torch
 from alg.ftbase import FTBaseClient, FTBaseServer
 
 
-def product_svd(stacked_b, stacked_a):
+def _truncated_product_svd(stacked_b, stacked_a, rank):
     """SVD of B@A through a small core, without materializing a dense update."""
     qb, rb = torch.linalg.qr(stacked_b.float(), mode='reduced')
     qa, ra = torch.linalg.qr(stacked_a.float().T, mode='reduced')
     u, sigma, vh = torch.linalg.svd(rb @ ra.T, full_matrices=False)
-    return qb @ u, sigma, vh @ qa.T
-
-
-def _truncated_product_svd(stacked_b, stacked_a, rank):
-    u, sigma, vh = product_svd(stacked_b, stacked_a)
     if rank > sigma.numel():
         raise ValueError('FlexLoRA rank exceeds the available product dimension')
-    new_b = u[:, :rank] * sigma[:rank]
-    new_a = vh[:rank, :]
+    new_b = (qb @ u[:, :rank]) * sigma[:rank]
+    new_a = vh[:rank, :] @ qa.T
     return new_b, new_a
 
 

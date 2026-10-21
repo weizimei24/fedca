@@ -25,7 +25,7 @@ python -m pip install -r requirements/requirements-stage1.txt
 python -X utf8 -u tools/install_commonsense_eval.py
 ```
 
-第二条命令供常识和数学评估使用，按固定版本安装 harness 到本地 `.runtime/lm_eval/`；该目录不提交。zsRE 语义聚类的数据处理另需：
+第二条命令供常识原生选择题补充评估及数学评估使用，按固定版本安装 harness 到本地 `.runtime/lm_eval/`；该目录不提交。常识选择 `--commonsense_native_eval never` 时，生成匹配评估不需要 harness。zsRE 语义聚类的数据处理另需：
 
 ```bash
 python -m pip install -r requirements/requirements-zsre.txt
@@ -73,11 +73,26 @@ python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg
 
 自动输出到 `exp/shared/<task>/<dataset>/<alg>/`，包括训练日志、断点、轮次快照和评估结果。新实验可通过 `--suffix` 指定不同目录。数据、模型或训练代码不一致时，断点校验会拒绝续跑。
 
-常识主评估使用与训练相同的 chat 提示，生成答案词后匹配，记录八个来源的 `generation_accuracy` 宏平均；同轮补充原生 lm-eval 0-shot 选择题准确率。`--commonsense_max_new_tokens 32` 控制答案生成预算。
+常识主评估使用与训练相同的 chat 提示，生成答案词后匹配，记录八个来源的 `generation_accuracy` 宏平均。`--commonsense_max_new_tokens 32` 控制答案生成预算。
+
+原生 lm-eval 0-shot 选择题作为补充，默认只在最后一轮评估：
+
+```bash
+# 仅生成匹配，不运行原生选择题
+python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg fedca --commonsense_native_eval never
+# 默认：生成匹配按 test_gap 评估，原生选择题仅在 rnd 指定的最后一轮评估
+python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg fedca --commonsense_native_eval last
+# 每个评测轮次均运行两种评估
+python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg fedca --commonsense_native_eval always
+```
+
+对已有轮次按需补跑原生评估，可使用相同训练配置、suffix，加 `--eval_only --eval_rounds 5 --commonsense_native_eval always`。改变开关会分开评估缓存；本地数据文件相同时，不会改变训练身份。若指定 `--commonsense_eval native` 为主指标，必须同时指定 `--commonsense_native_eval always`。
 
 zsRE 使用短答案生成及 EM/F1/containment；数学使用 GSM8K 数值比较及 MATH 的固定 harness 字符串规范化比较，并接受 `The answer is: ...` 格式。数学评估提示不额外要求 boxed，与训练 user 内容保持一致。详细协议和 Local-only 范围见方法说明。
 
 2026-10-21 更新会改变共享训练源码身份及评估协议。旧 shared 实验继续使用原版本续训，新实验使用新 suffix；新生成准确率不能与旧原生选择题分数直接混比。
+
+各论文方法保留原有算法流程，仅修复运行、状态保存等必要问题。此前将 FedMomentum 随机 SVD 替换成精确 SVD 的修改已撤回；FedMomentum 和 FlexLoRA 均恢复首次代码发布时的分解实现。
 
 FedEx-LoRA/FedMomentum 的中途断点引用初始/轮次基础层快照，迁移断点需同时保留 `resume/`、`initial/` 和 `round_*/`。共享身份不再绑定 GPU 编号，但仍校验模型内容、数据、训练设置、代码和关键包版本。
 

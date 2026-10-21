@@ -58,6 +58,12 @@ class DatasetAdapter:
     def validate_tasks(self, tasks, files):
         pass
 
+    def identity_files(self, path):
+        return [file for _, file, _ in self.tasks(path)]
+
+    def scheduled_tasks(self, tasks, round_number, args):
+        return tasks
+
 
 class ZsreAdapter(DatasetAdapter):
     def prompt(self, tokenizer, text):
@@ -73,12 +79,28 @@ class ZsreAdapter(DatasetAdapter):
             raise ValueError('zsRE evaluation groups must match the original client IDs')
 
 
+@dataclass
 class CommonsenseAdapter(DatasetAdapter):
+    include_native: bool = True
+
     def tasks(self, path):
         generation = [(domain, path / 'test' / f'{cid}.jsonl', cid) for cid, domain in enumerate(DOMAINS)]
         native = [(f'native_{domain}', path / 'benchmarks' / f'{domain}.jsonl', cid)
                   for cid, domain in enumerate(DOMAINS)]
-        return generation + native
+        return generation + native if self.include_native else generation
+
+    def identity_files(self, path):
+        # Switching an evaluation-only flag must not change training identity
+        # when the same prepared files are present. Native files are optional
+        # for generation-only data without a full preparation manifest.
+        all_tasks = replace(self, include_native=True).tasks(path)
+        return [file for _, file, _ in all_tasks if file.is_file()]
+
+    def scheduled_tasks(self, tasks, round_number, args):
+        policy = args.commonsense_native_eval
+        if policy == 'always' or (policy == 'last' and round_number == args.rnd):
+            return tasks
+        return [task for task in tasks if not task[0].startswith('native_')]
 
     def validate_clients(self, files):
         if len(files) != len(DOMAINS):
@@ -93,8 +115,8 @@ class MathAdapter(DatasetAdapter):
 DATASETS = {
     'zsre': ZsreAdapter('zsre', 'zsre_chat_eos_dynamic_v1', 'generation_zsre_v2', 'em'),
     'commonsense170k': CommonsenseAdapter('commonsense170k', TRAIN_PROTOCOL,
-        'commonsense_chat_generation_plus_native_v2', 'generation_accuracy', ('lm_eval',)),
-    'metamathqa': MathAdapter('metamathqa', 'math_chat_eos_v1', 'math_chat_greedy_training_prompt_v3',
+        'commonsense_chat_generation_plus_native_v3', 'generation_accuracy', ('lm_eval',)),
+    'metamathqa': MathAdapter('metamathqa', 'math_chat_eos_v1', 'math_chat_greedy_training_prompt_v4',
         'exact_match', ('lm_eval',)),
 }
 
@@ -112,8 +134,15 @@ def adapter_for(args):
     if name not in DATASETS:
         raise ValueError(f'No dataset adapter for {name!r}')
     adapter = DATASETS[name]
-    if name == 'commonsense170k' and getattr(args, 'commonsense_eval', 'generation') == 'native':
-        adapter = replace(adapter, primary_metric='acc,none')
+    if name == 'commonsense170k':
+        policy = getattr(args, 'commonsense_native_eval', 'last')
+        primary = getattr(args, 'commonsense_eval', 'generation')
+        if policy not in ('never', 'last', 'always'):
+            raise ValueError('commonsense_native_eval must be never, last or always')
+        if primary == 'native' and policy != 'always':
+            raise ValueError('Native primary metric requires --commonsense_native_eval always')
+        adapter = replace(adapter, primary_metric='acc,none' if primary == 'native' else 'generation_accuracy',
+                          include_native=policy != 'never', evaluator_packages=('lm_eval',) if policy != 'never' else ())
     return adapter
 
 
@@ -158,7 +187,7 @@ def prepare_data(args, tokenizer):
     if args.alg == 'localonly' and any(cid is None for _, _, cid in tasks):
         # Mathematics has global evaluation sets; each local model evaluates both.
         tasks = [(f'client_{cid}_{name}', path, cid) for cid in range(len(files)) for name, path, _ in tasks]
-    data_files = files + [p for _, p, _ in tasks]
+    data_files = files + adapter.identity_files(folder)
     data_files += [p for p in (folder / 'manifest.json', folder / 'client_mapping.json', folder / 'stats.json') if p.exists()]
     return {'adapter': adapter, 'dataset': folder, 'encoded': encoded, 'tasks': tasks,
             'audit': audit, 'data_files': {p.relative_to(folder).as_posix(): sha256(p) for p in set(data_files)}}

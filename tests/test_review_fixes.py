@@ -71,7 +71,8 @@ class ReviewFixesTest(unittest.TestCase):
         labels = ['solution1', 'solution2']
         self.assertEqual(commonsense_answer('Reasoning about solution2.\nThe correct answer is solution1.', labels), 'solution1')
         self.assertIsNone(commonsense_answer('solution10', labels))
-        self.assertIsNone(commonsense_answer('The correct answer is solution1 or solution2', labels))
+        self.assertEqual(commonsense_answer('The correct answer is solution1 or solution2', labels), 'solution1')
+        self.assertIsNone(commonsense_answer('solution1 or solution2', labels))
         self.assertIsNone(commonsense_answer('No answer', labels))
         self.assertEqual(commonsense_answer('the correct answer is FALSE', ['true', 'false']), 'false')
 
@@ -195,7 +196,7 @@ class ReviewFixesTest(unittest.TestCase):
         self.assertEqual(mask[0, -1].item(), 0)
         self.assertEqual(labels[0, -1].item(), -100)
 
-    def test_fedmomentum_small_core_aggregation_does_not_consume_rng(self):
+    def test_fedmomentum_keeps_original_random_sketch_and_rng_consumption(self):
         from alg.fedmomentum import Server
         from tests.test_zsre_extra_lora import FakeModel, A, B, sample_clients
         torch.manual_seed(19)
@@ -207,5 +208,121 @@ class ReviewFixesTest(unittest.TestCase):
         server.model = FakeModel(torch.zeros(2, 4), torch.zeros(4, 2))
         server.global_lora = {A: torch.zeros(2, 4), B: torch.zeros(4, 2)}
         before = torch.get_rng_state().clone()
-        server.aggregate()
-        self.assertTrue(torch.equal(before, torch.get_rng_state()))
+        original_randn = torch.randn
+        with patch('alg.fedmomentum.torch.randn', wraps=original_randn) as sketch:
+            server.aggregate()
+        self.assertEqual(sketch.call_count, 1)
+        self.assertEqual(sketch.call_args.args, (4, 4))
+        self.assertFalse(torch.equal(before, torch.get_rng_state()))
+
+    def test_answer_labels_are_not_split_by_the_answer_marker(self):
+        labels = [f'answer{i}' for i in range(1, 6)]
+        for label in labels:
+            for text in (label, label.upper(), f'The correct answer is {label}.', f'Answer: {label}'):
+                with self.subTest(text=text):
+                    self.assertEqual(commonsense_answer(text, labels), label)
+        self.assertEqual(commonsense_answer('The answer is answer3, not answer1.', labels), 'answer3')
+        self.assertEqual(commonsense_answer('The answer is answer3, not answer1.', list(reversed(labels))), 'answer3')
+        self.assertIsNone(commonsense_answer('answer1 or answer3', labels))
+        self.assertIsNone(commonsense_answer('answer10', labels))
+        self.assertIsNone(commonsense_answer('unanswer1', labels))
+
+    def test_numeric_delimiters_and_sentence_period_preserve_decimals(self):
+        from utils.evaluation_adapters import numeric_answer
+        examples = {'$18$.': '18', '$0.18$.': '0.18', '.18': '.18', '$.18$.': '.18',
+                    '$-1,234$.': '-1234', r'$\frac{1}{2}$.': '1/2', '$$18$$ .': '18'}
+        for text, expected in examples.items():
+            with self.subTest(text=text):
+                self.assertEqual(numeric_answer(text), expected)
+        self.assertEqual(final_math_answer('The final answer is: $18$.', 'gsm8k'), '18')
+        self.assertIsNone(numeric_answer('$18$ extra text.'))
+        self.assertIsNone(numeric_answer('$1/0$.'))
+
+    def test_native_evaluation_schedule_is_optional_and_round_specific(self):
+        adapter = DATASETS['commonsense170k']
+        tasks = adapter.tasks(Path('processed'))
+        args = SimpleNamespace(rnd=30, commonsense_native_eval='last')
+        self.assertEqual(len(adapter.scheduled_tasks(tasks, 5, args)), 8)
+        self.assertEqual(len(adapter.scheduled_tasks(tasks, 30, args)), 16)
+        args.commonsense_native_eval = 'always'
+        self.assertEqual(len(adapter.scheduled_tasks(tasks, 5, args)), 16)
+        args.commonsense_native_eval = 'never'
+        self.assertEqual(len(adapter.scheduled_tasks(tasks, 30, args)), 8)
+
+    def test_generation_only_does_not_require_harness_or_native_task_files(self):
+        from utils.dataset_adapters import adapter_for
+        from utils.evaluation_adapters import validate_evaluator
+        args = SimpleNamespace(task='commonsense170k', commonsense_eval='generation', commonsense_native_eval='never')
+        adapter = adapter_for(args)
+        self.assertEqual(len(adapter.tasks(Path('processed'))), 8)
+        self.assertEqual(adapter.evaluator_packages, ())
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / '0.jsonl'
+            path.write_text(json.dumps({'input_ids': 'q', 'answer': 'answer1', 'choice_labels': ['answer1','answer2']})+'\n')
+            with patch('utils.commonsense_eval.ensure_runtime', side_effect=AssertionError('not needed')):
+                validate_evaluator(adapter, [('boolq', path, 0)])
+        args.commonsense_eval = 'native'
+        with self.assertRaisesRegex(ValueError, 'always'):
+            adapter_for(args)
+
+    def test_switching_native_policy_preserves_data_identity(self):
+        from utils.dataset_adapters import prepare_data
+        class EncodingTokenizer(Tokenizer):
+            def __call__(self, *args, **kwargs): return {'input_ids': [5]}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for split in ('train','test','benchmarks'):
+                (root / split).mkdir()
+            for cid, domain in enumerate(DOMAINS):
+                row = json.dumps({'client_id': cid, 'input_ids': 'q', 'label': 'a'})+'\n'
+                (root / 'train' / f'{cid}.jsonl').write_text(row)
+                (root / 'test' / f'{cid}.jsonl').write_text(row)
+                (root / 'benchmarks' / f'{domain}.jsonl').write_text('{}\n')
+            args = SimpleNamespace(task='commonsense170k', dataset=str(root), alg='fedit', cn=None,
+                max_length=16, commonsense_eval='generation', commonsense_native_eval='never')
+            off = prepare_data(args, EncodingTokenizer())
+            args.commonsense_native_eval = 'always'
+            on = prepare_data(args, EncodingTokenizer())
+            self.assertEqual(off['data_files'], on['data_files'])
+            self.assertEqual((len(off['tasks']),len(on['tasks'])), (8,16))
+
+    def test_native_schedule_and_cache_do_not_mix_supplementary_metrics(self):
+        helper = runtime_support.SharedRuntimeTest()
+        with tempfile.TemporaryDirectory() as tmp:
+            helper.simulate(Path(tmp), 'fedit', rounds=2)
+            run = helper.last_server.experiment_run
+            run.prepared['tasks'] += [(f'native_{name}', path, cid) for name,path,cid in list(run.prepared['tasks'])]
+            calls = []
+            def evaluate(adapter, model, tokenizer, name, path, args):
+                calls.append(name)
+                return {'metrics': {'acc,none': .25} if name.startswith('native_') else {'generation_accuracy': .5}}
+            with patch('utils.experiment.evaluate_task', side_effect=evaluate), \
+                 patch('utils.experiment.importlib.metadata.version', return_value='test'):
+                first = run.evaluate(1)
+                self.assertEqual(first, {'macro_generation_accuracy': .5})
+                self.assertEqual(calls, [])  # Existing generation cache is reused.
+                final = run.evaluate(2)
+                self.assertEqual(final, {'macro_generation_accuracy': .5, 'macro_native_mc_raw_accuracy': .25})
+                self.assertEqual(len(calls), 4)
+                calls.clear()
+                run.args.commonsense_native_eval = 'always'
+                self.assertIn('macro_native_mc_raw_accuracy', run.evaluate(1))
+                self.assertEqual(len(calls), 4)
+                calls.clear()
+                run.args.commonsense_native_eval = 'never'
+                self.assertEqual(run.evaluate(2), {'macro_generation_accuracy': .5})
+                self.assertTrue(all(not name.startswith('native_') for name in calls))
+
+    def test_shared_and_legacy_clients_use_the_same_freeze_policy(self):
+        from utils.method_state import configure_trainable
+        from tests.test_zsre_extra_lora import FakeModel, A, B, W
+        for method in ('ffalora','fedsvd'):
+            for call_style in ('server','model'):
+                model = FakeModel(torch.ones(2,4),torch.ones(4,2))
+                if call_style == 'server':
+                    configure_trainable(SimpleNamespace(model=model,args=SimpleNamespace(alg=method)))
+                else:
+                    configure_trainable(model=model,method=method)
+                self.assertTrue(model.values[B].requires_grad)
+                self.assertFalse(model.values[A].requires_grad)
+                self.assertFalse(model.values[W].requires_grad)

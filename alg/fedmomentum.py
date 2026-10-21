@@ -3,7 +3,6 @@ import os
 
 from alg.ftbase import FTBaseClient, FTBaseServer
 from utils.time_utils import time_record
-from alg.flexlora import product_svd
 
 
 def add_args(parser):
@@ -30,9 +29,8 @@ class Server(FTBaseServer):
 
     def aggregate(self):
         r = self.args.lora_rank
+        n = len(self.sampled_clients)
         data_sum = sum([len(c.dataset['train']) for c in self.sampled_clients])
-        if data_sum <= 0:
-            raise ValueError('FedMomentum requires sampled clients with training rows')
 
         lora_a_keys = [k for k in self.global_lora.keys() if 'lora_A' in k]
         new_global_lora = {k: v.clone() for k, v in self.global_lora.items()}
@@ -41,17 +39,26 @@ class Server(FTBaseServer):
             b_key = a_key.replace('lora_A', 'lora_B')
             base_key = a_key.replace('.lora_A.default.weight', '.base_layer.weight')
 
-            # Exact thin SVD of sum_i w_i B_i A_i through the small QR core.
-            # No dense update or random sketch is allocated.
-            factors_a, factors_b = [], []
+            # ── Step 1: noise-free aggregation  ΔW = Σ w_i · B_i · A_i ──────────
+            delta_W = None
             for client in self.sampled_clients:
                 w_i = len(client.dataset['train']) / data_sum
                 A_i = client.lora[a_key].float()
                 B_i = client.lora[b_key].float()
-                factors_a.append(w_i * A_i)
-                factors_b.append(B_i)
-            U, S, Vt = product_svd(torch.cat(factors_b, dim=1), torch.cat(factors_a, dim=0))
-            d, k = U.shape[0], Vt.shape[1]
+                dW_i = w_i * torch.matmul(B_i, A_i)
+                delta_W = dW_i if delta_W is None else delta_W + dW_i
+
+            d, k = delta_W.shape
+
+            # ── Step 2: randomised SVD with sketch size c = n·r ──────────────────
+            c = n * r
+            Omega = torch.randn(k, c, device=delta_W.device, dtype=delta_W.dtype)
+            Y = torch.matmul(delta_W, Omega)                    # (d, c)
+            Q, _ = torch.linalg.qr(Y)                           # Q: (d, c)
+            P = torch.matmul(Q.t(), delta_W)                    # (c, k)
+            U_tilde, S, Vt = torch.linalg.svd(P, full_matrices=False)
+            # U_tilde: (c, m)  S: (m,)  Vt: (m, k)  where m = min(c, k)
+            U = torch.matmul(Q, U_tilde)                        # (d, m)
 
             # ── Step 3: determine residual rank s via energy criterion ────────────
             total_energy = (S ** 2).sum()
@@ -72,7 +79,7 @@ class Server(FTBaseServer):
 
             # B = U_r · diag(Σ_r^½)   shape: (d, r)
             # A = diag(Σ_r^½) · V_r^T shape: (r, k)
-            new_B = torch.zeros(d, r, device=U.device, dtype=U.dtype)
+            new_B = torch.zeros(d, r, device=delta_W.device, dtype=delta_W.dtype)
             # Keep directions for unused components. Zeroing BOTH factors
             # makes their gradients zero and permanently prevents learning.
             new_A = self.global_lora[a_key].float().clone()

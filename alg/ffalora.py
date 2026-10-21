@@ -2,17 +2,13 @@
 
 from alg.ftbase import FTBaseClient, FTBaseServer
 from utils.time_utils import time_record
+from utils.method_state import configure_trainable
 
 
 class Client(FTBaseClient):
     @time_record
     def run(self, model):
-        if not getattr(getattr(self, 'args', None), '_shared', False):
-            for param in model.parameters():
-                param.requires_grad = False
-            for name, param in model.named_parameters():
-                if 'lora_B' in name:
-                    param.requires_grad = True
+        configure_trainable(model=model, method='ffalora')
         self.last_train_loss = self.trainer.train(model)
         self.lora = {
             key: value.clone()

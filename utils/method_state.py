@@ -48,11 +48,19 @@ def validate_method(args):
         raise ValueError('residual_threshold must be in (0, 1]')
 
 
-def configure_trainable(server):
-    spec = method_spec(server.args.alg)
-    for name, param in server.model.named_parameters():
-        if 'lora_' in name:
-            param.requires_grad_(not spec.frozen_a or 'lora_B' in name)
+def configure_trainable(server=None, *, model=None, method=None):
+    """Apply the same parameter policy at server setup and client entry."""
+    if server is not None:
+        model, method = server.model, server.args.alg
+    if model is None or method is None:
+        raise ValueError('configure_trainable requires a server or model and method')
+    spec = method_spec(method)
+    for name, param in model.named_parameters():
+        if spec.frozen_a:
+            # Original FFA-LoRA/FedSVD policy: freeze everything except B.
+            param.requires_grad_('lora_B' in name)
+        elif 'lora_' in name:
+            param.requires_grad_(True)
 
 
 def complete_adapter(model):

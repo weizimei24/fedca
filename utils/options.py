@@ -81,7 +81,9 @@ def build_parser(*, max_new_tokens_default=1024) -> argparse.ArgumentParser:
     parser.add_argument('--eval_limit', '--eval-limit', type=int)
     parser.add_argument('--eval_max_length', '--eval-max-length', type=int, default=4096)
     parser.add_argument('--commonsense_eval', choices=('generation', 'native'), default='generation',
-                        help='primary Commonsense metric; both generation and native MC are evaluated')
+                        help='primary Commonsense metric; native primary requires --commonsense_native_eval always')
+    parser.add_argument('--commonsense_native_eval', choices=('never', 'last', 'always'), default='last',
+                        help='run supplementary native MC never, at the final training round, or at every evaluation')
     parser.add_argument('--commonsense_max_new_tokens', type=int, default=32)
     parser.add_argument('--max_length', '--max-length', type=int, default=1536)
     parser.add_argument('--check_only', '--check-only', action='store_true')
