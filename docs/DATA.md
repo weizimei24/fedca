@@ -25,6 +25,8 @@ Commonsense170K 来源为 LLM-Adapters 作者的数据；MetaMathQA 来源为 `m
 
 常识的 `test/<client>.jsonl` 保留作者的生成式指令、答案词与选项标签，供主生成评估；`benchmarks/<domain>.jsonl` 保留原生题目字段，供补充 lm-eval 选择题评估。前五个来源采用有标签的 validation，ARC-Easy、ARC-Challenge、OpenBookQA 采用 test；未将无标签测试集当作可评分数据。
 
+统一训练流程在内存中把常识训练/生成评估的格式提示改为明确的单标签要求，保留原始答案句作为训练目标。现有处理数据无需重做，原生选择题文件不变。提示协议及新实验目录要求见 [方法说明](METHODS.md)。
+
 数学 `evaluation/gsm8k.jsonl` 与 `evaluation/math.jsonl` 分别保存完整 GSM8K test 和 MATH test。训练保留完整推理和最终答案。数据准备会检查重复、答案冲突、来源映射及与测试题的精确重叠；精确匹配检查不代表不存在语义近似重复。
 
 `data/lm_eval_tasks/` 是可重新下载的固定版本参考资源，不随代码提交；评估运行库由 `tools/install_commonsense_eval.py` 安装到 `.runtime/lm_eval/`。

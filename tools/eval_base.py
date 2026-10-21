@@ -27,6 +27,8 @@ def write_predictions(path, rows, predictions):
     with temporary.open('w', encoding='utf-8') as stream:
         for row, prediction in zip(rows, predictions):
             record = {'prompt': row['input_ids'], **prediction}
+            if record['prompt'] != row['input_ids']:
+                record['dataset_prompt'] = row['input_ids']
             if 'choice_labels' in row:
                 record['choice_labels'] = row['choice_labels']
             stream.write(json.dumps(record, ensure_ascii=False) + '\n')

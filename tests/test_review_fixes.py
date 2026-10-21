@@ -11,7 +11,7 @@ from unittest.mock import patch
 import torch
 
 from tests import test_shared_runtime as runtime_support
-from utils.dataset_adapters import DATASETS, DOMAINS
+from utils.dataset_adapters import DATASETS, DOMAINS, commonsense_user_content
 from utils.evaluation_adapters import commonsense_answer, final_math_answer, generate_math, generate_commonsense
 from utils.runtime_utils import CheckpointStore, source_sha256
 
@@ -83,7 +83,7 @@ class ReviewFixesTest(unittest.TestCase):
         result = generate_commonsense(model, tokenizer, [{'input_ids': 'Choose the solution',
             'choice_labels': ['solution1', 'solution2'], 'answer': 'solution2'}], options)
         self.assertEqual(result['metrics']['generation_accuracy'], 1.0)
-        self.assertEqual(tokenizer.last_messages, [{'role': 'user', 'content': 'Choose the solution'}])
+        self.assertEqual(tokenizer.last_messages, [{'role': 'user', 'content': commonsense_user_content('Choose the solution')}])
         self.assertEqual(model.generation_config.max_new_tokens, 24)
         self.assertEqual(tokenizer.padding_side, 'right')
 

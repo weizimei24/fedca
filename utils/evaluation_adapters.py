@@ -6,7 +6,7 @@ from fractions import Fraction
 
 import torch
 
-from utils.dataset_adapters import read_rows
+from utils.dataset_adapters import commonsense_user_content, read_rows
 
 
 def validate_evaluator(adapter, tasks):
@@ -211,7 +211,7 @@ def generate_commonsense(model, tokenizer, rows, args):
         for offset in range(0, len(rows), args.eval_batch_size):
             batch = rows[offset:offset + args.eval_batch_size]
             prompts = [tokenizer.apply_chat_template(
-                [{'role': 'user', 'content': row['input_ids']}], tokenize=True,
+                [{'role': 'user', 'content': commonsense_user_content(row['input_ids'])}], tokenize=True,
                 add_generation_prompt=True, enable_thinking=False) for row in batch]
             if any(len(prompt) + limit > args.eval_max_length for prompt in prompts):
                 raise ValueError('Commonsense evaluation prompt + generation exceeds eval_max_length; no truncation')
@@ -226,14 +226,15 @@ def generate_commonsense(model, tokenizer, rows, args):
             for row, completion in zip(batch, tokens[:, inputs['input_ids'].shape[1]:]):
                 text = tokenizer.decode(completion, skip_special_tokens=True)
                 answer = commonsense_answer(text, row['choice_labels'])
-                predictions.append({'sample_id': row.get('sample_id'), 'prediction': text,
+                predictions.append({'sample_id': row.get('sample_id'),
+                    'prompt': commonsense_user_content(row['input_ids']), 'prediction': text,
                     'extracted_answer': answer, 'target': row['answer'], 'correct': answer == row['answer'],
                     'hit_max_new_tokens': not bool((completion == tokenizer.eos_token_id).any()) and len(completion) >= limit})
     finally:
         tokenizer.padding_side = original_padding
     return {'metrics': {'generation_accuracy': sum(row['correct'] for row in predictions) / len(predictions)},
             'num_samples': len(predictions), 'predictions': predictions,
-            'protocol': 'commonsense_chat_generation_v2'}
+            'protocol': 'commonsense_chat_single_label_generation_v3'}
 
 
 def evaluate_task(adapter, model, tokenizer, name, path, args):

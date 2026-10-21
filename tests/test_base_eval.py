@@ -10,6 +10,34 @@ from utils.runtime_utils import atomic_json, fingerprint, sha256
 
 
 class BaseEvaluationTest(unittest.TestCase):
+    def test_single_label_training_and_generation_share_the_actual_prompt(self):
+        from tests.test_review_fixes import Model, Tokenizer
+        from utils.dataset_adapters import DATASETS
+        from utils.evaluation_adapters import generate_commonsense
+        class TrainingTokenizer(Tokenizer):
+            def __call__(self, text, **kwargs):
+                return {'input_ids': [8, 9]}
+        tokenizer = TrainingTokenizer()
+        text = 'Pick one. Answer1: a Answer2: b\n\nAnswer format: answer1/answer2'
+        row = {'input_ids': text, 'label': 'the correct answer is answer2',
+               'answer': 'answer2', 'choice_labels': ['answer1', 'answer2']}
+        encoded = DATASETS['commonsense170k'].encode(tokenizer, row, 16)
+        training_messages = tokenizer.last_messages
+        tokenizer.completion = 'the correct answer is answer2'
+        args = SimpleNamespace(eval_batch_size=1, eval_max_length=64, commonsense_max_new_tokens=32)
+        result = generate_commonsense(Model(), tokenizer, [row], args)
+        self.assertEqual(training_messages, tokenizer.last_messages)
+        content = training_messages[0]['content']
+        self.assertNotIn('Answer format:', content)
+        self.assertIn('Allowed answer labels: answer1, answer2.', content)
+        self.assertIn('Select exactly one answer label.', content)
+        self.assertIn('Do not repeat the list of labels.', content)
+        self.assertEqual(result['predictions'][0]['prompt'], content)
+        self.assertEqual(result['metrics']['generation_accuracy'], 1)
+        self.assertEqual(encoded['labels'], [-100, -100, 8, 9, tokenizer.eos_token_id])
+        self.assertEqual(DATASETS['commonsense170k'].encoding, 'commonsense_chat_single_label_eos_v2')
+        self.assertEqual(DATASETS['metamathqa'].encoding, 'math_chat_eos_v1')
+
     def test_real_base_math_answer_presentation_and_units(self):
         from utils.evaluation_adapters import final_math_answer
         examples = {'Final Answer: **3 bolts**.': '3',
@@ -50,6 +78,10 @@ class BaseEvaluationTest(unittest.TestCase):
             self.assertEqual(record['prompt'], 'question')
             self.assertEqual(record['choice_labels'], ['answer1','answer2'])
             self.assertEqual(record['extracted_answer'], 'answer1')
+            write_predictions(path, rows, [{**predictions[0], 'prompt':'effective instruction'}])
+            record = json.loads(path.read_text(encoding='utf-8'))
+            self.assertEqual(record['prompt'], 'effective instruction')
+            self.assertEqual(record['dataset_prompt'], 'question')
             with self.assertRaises(ValueError):
                 write_predictions(path, rows, [])
 

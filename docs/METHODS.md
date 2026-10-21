@@ -53,7 +53,9 @@ FedExP          --ca_lambda 0 --ca_eta_mode fedexp
 
 ## 三种任务的评估
 
-**Commonsense170K：** 主协议为 `commonsense_chat_generation_plus_native_v3`。生成提示与训练相同，读取 `test/<client>.jsonl`，非 thinking chat、greedy、默认最多生成 32 token。提取 `true/false`、`solution1`、`answer1` 等该题允许的答案词，以完整 token 边界匹配；明确答案语句后采用文本中第一个合法标签，没有明确语句时必须只有一种合法标签，否则判错。主要指标为八个来源的 `generation_accuracy` 宏平均，每个来源等权。`answer` 标记不会拆开 `answer1` 等完整标签。
+**Commonsense170K：** 主协议为 `commonsense_chat_single_label_plus_native_v4`，训练编码为 `commonsense_chat_single_label_eos_v2`。训练和生成评估共用 `commonsense_user_content`：将原来的斜杠分隔格式提示改成允许标签列表，明确要求只选一个标签、只输出 `the correct answer is <label>`、不复述列表、不解释；训练目标仍是原数据的答案句。该转换只在加载时生效，不改原始/处理数据文件。新协议使用新实验目录，旧协议的模型不能在新协议下作为相同训练条件直接比较，旧断点应使用原版本续训。
+
+生成评估读取 `test/<client>.jsonl`，非 thinking chat、greedy、默认最多生成 32 token。提取 `true/false`、`solution1`、`answer1` 等该题允许的答案词，以完整 token 边界匹配；明确答案语句后采用文本中第一个合法标签，没有明确语句时必须只有一种合法标签，否则判错。主要指标为八个来源的 `generation_accuracy` 宏平均，每个来源等权。`answer` 标记不会拆开 `answer1` 等完整标签。预测中的 `prompt` 记录实际使用的新提示；Base 诊断还保留 `dataset_prompt` 供核对原数据。
 
 补充评估读取 `benchmarks/<domain>.jsonl`，运行固定 `lm_eval==0.4.13` 的原生 0-shot 选择题评估，不包 chat，记录 `native_mc_raw_accuracy`。`--commonsense_native_eval` 控制执行时机：`never` 不执行，`last` 仅在本次训练目标 `rnd` 对应的最后一轮执行（默认），`always` 每个评估轮次均执行。只评估历史轮次时也遵守这个规则；按需补跑需显式使用 `always`。生成评估仍按 `test_gap` 和最后一轮执行。
 

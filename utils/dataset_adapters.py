@@ -6,9 +6,24 @@ from pathlib import Path
 from utils.runtime_utils import sha256
 
 ROOT = Path(__file__).resolve().parents[1]
-TRAIN_PROTOCOL = 'commonsense_chat_eos_v1'
+TRAIN_PROTOCOL = 'commonsense_chat_single_label_eos_v2'
 DOMAINS = ('boolq', 'piqa', 'social_i_qa', 'hellaswag', 'winogrande',
            'arc_easy', 'arc_challenge', 'openbookqa')
+
+
+def commonsense_user_content(text):
+    """Use one identical, single-choice instruction in training and generation.
+
+    Retain the prepared answer sentence as the target; only disambiguate the
+    slash-separated format hint, which Base models can mistake for a response.
+    """
+    body, marker, labels = text.rpartition('Answer format:')
+    if marker:
+        text = body.rstrip() + '\n\nAllowed answer labels: ' + ', '.join(labels.strip().split('/')) + '.'
+    return (text + '\n\nSelect exactly one answer label. '
+            'Reply with only this sentence: the correct answer is <label>. '
+            'Replace <label> with your chosen label. '
+            'Do not repeat the list of labels. Do not explain your answer.')
 
 
 def read_rows(path):
@@ -83,6 +98,9 @@ class ZsreAdapter(DatasetAdapter):
 class CommonsenseAdapter(DatasetAdapter):
     include_native: bool = True
 
+    def prompt(self, tokenizer, text):
+        return super().prompt(tokenizer, commonsense_user_content(text))
+
     def tasks(self, path):
         generation = [(domain, path / 'test' / f'{cid}.jsonl', cid) for cid, domain in enumerate(DOMAINS)]
         native = [(f'native_{domain}', path / 'benchmarks' / f'{domain}.jsonl', cid)
@@ -115,7 +133,7 @@ class MathAdapter(DatasetAdapter):
 DATASETS = {
     'zsre': ZsreAdapter('zsre', 'zsre_chat_eos_dynamic_v1', 'generation_zsre_v2', 'em'),
     'commonsense170k': CommonsenseAdapter('commonsense170k', TRAIN_PROTOCOL,
-        'commonsense_chat_generation_plus_native_v3', 'generation_accuracy', ('lm_eval',)),
+        'commonsense_chat_single_label_plus_native_v4', 'generation_accuracy', ('lm_eval',)),
     'metamathqa': MathAdapter('metamathqa', 'math_chat_eos_v1', 'math_chat_greedy_training_prompt_v4',
         'exact_match', ('lm_eval',)),
 }

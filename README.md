@@ -126,7 +126,15 @@ python -X utf8 -u tools/eval_base.py --config config/experiments/zsre.yaml --eva
 
 抽查时区分“模型没有给出唯一答案”和“代码提取失败”。例如裸输出 `answer1/answer2/answer3` 没有明确选择，按当前规则返回 null；不能从中借助参考答案选一个。数学还应检查推理是否在 `max_new_tokens` 处被截断。
 
-当前常识提示可能让未微调 Base 复述标签列表，导致生成准确率同时受知识能力和格式遵循影响。正式比较时应检查有效标签率，并保留原生选择题对照。若决定强化“只选一个标签”的指令，必须同时修改训练和生成评估的提示，并作为新协议启动实验。
+当前常识训练和生成评估共用单标签指令：移除容易被复述的 `Answer format: answer1/answer2/...` 尾部提示，列明允许的标签，并要求只回复 `the correct answer is <label>`，只选一个标签、不复述候选列表、不解释。监督目标仍为处理数据中的原始答案句。转换发生在加载时，不修改或重新生成 `dataset/` 文件；预测 JSONL 的 `prompt` 保存实际发送的新提示，`dataset_prompt` 保留数据文件中的原提示。
+
+训练编码协议为 `commonsense_chat_single_label_eos_v2`，评估协议为 `commonsense_chat_single_label_plus_native_v4`。新提示必须用于新实验，不能与旧提示的断点混合续训或直接混比生成分数。旧实验继续使用原版本源码；共享源码指纹变化也会触发其他任务的旧断点身份检查。新实验示例：
+
+```bash
+python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg fedca --rnd 30 --test_gap 5 --suffix cs_single_label_v2/fedca
+```
+
+改变提示不保证 Base 总能遵守格式。正式比较仍需检查有效标签率，并保留原生选择题对照。
 
 GSM8K 对明确最终答案支持 Markdown 加粗、货币/百分号和单位，例如 `Final Answer: **3 bolts**`、`\boxed{60\%}`；拒绝多个候选数字或未计算的表达式。MATH 继续使用固定 harness 的字符串规范化，不做任意符号等价证明，因此部分写法不同的等价代数式仍可能判错。
 
