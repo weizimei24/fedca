@@ -12,6 +12,24 @@ python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg
 python -X utf8 -u main.py --config config/experiments/metamathqa.yaml --alg fedit
 ```
 
+三套任务的配置分别为 `config/experiments/zsre.yaml`、`config/experiments/commonsense170k.yaml`、`config/experiments/metamathqa.yaml`。下面列出十种方法的完整训练命令（Bash；PowerShell 将首行改为 `$cfg = "config/experiments/commonsense170k.yaml"`）：
+
+```bash
+cfg=config/experiments/commonsense170k.yaml
+python -X utf8 -u main.py --config "$cfg" --alg fedit --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg centralized --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg localonly --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg fedca --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg ffalora --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg fedsvd --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg fedexlora --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg fedrotlora --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg flexlora --rnd 30 --test_gap 5
+python -X utf8 -u main.py --config "$cfg" --alg fedmomentum --rnd 30 --test_gap 5
+```
+
+更换首行配置即可切换任务。默认按任务、数据集、方法分别输出，中断后执行相同命令自动续训；更改训练配置进行新实验时使用新 `--suffix`。
+
 统一流程支持：`fedit`、`centralized`、`localonly`、`fedca`、`ffalora`、`fedsvd`、`fedexlora`、`fedrotlora`、`flexlora`、`fedmomentum`。默认训练 30 轮，每 5 轮评估，最后一轮也评估；通过 `--rnd` 和 `--test_gap` 覆盖。方法、协议和恢复机制见 [方法说明](docs/METHODS.md)，数据来源与处理见 [数据说明](docs/DATA.md)。这三份是当前使用文档。
 
 三种任务共用 `main.py → alg.Server/Client → utils.train_utils.Trainer`。公共生命周期位于 `utils/experiment.py`，数据和评估差异分别位于 `utils/dataset_adapters.py`、`utils/evaluation_adapters.py`。
@@ -70,6 +88,51 @@ python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg
 # 对已经保存的轮次补评估。
 python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg fedca --rnd 30 --eval_only --eval_rounds 5,10,15
 ```
+
+一次检查三任务十方法，不开始训练（Bash）：
+
+```bash
+for task in zsre commonsense170k metamathqa; do
+  for method in fedit centralized localonly fedca ffalora fedsvd fedexlora fedrotlora flexlora fedmomentum; do
+    python -X utf8 -u main.py --config "config/experiments/$task.yaml" --alg "$method" --rnd 30 --test_gap 5 --check_only || exit 1
+  done
+done
+```
+
+PowerShell 对应写法：
+
+```powershell
+foreach ($task in @('zsre','commonsense170k','metamathqa')) {
+  foreach ($method in @('fedit','centralized','localonly','fedca','ffalora','fedsvd','fedexlora','fedrotlora','flexlora','fedmomentum')) {
+    python -X utf8 -u main.py --config "config/experiments/$task.yaml" --alg $method --rnd 30 --test_gap 5 --check_only
+    if ($LASTEXITCODE -ne 0) { throw "Preflight failed: $task/$method" }
+  }
+}
+```
+
+## Base 模型的小规模评分与预测抽查
+
+`--eval_only` 读取已训练断点，不表示 Base。未微调模型使用专门入口，直接复用正式训练的评分函数，不创建或加载 LoRA：
+
+```bash
+python -X utf8 -u tools/eval_base.py --config config/experiments/commonsense170k.yaml --eval_limit 50
+python -X utf8 -u tools/eval_base.py --config config/experiments/metamathqa.yaml --eval_limit 50
+python -X utf8 -u tools/eval_base.py --config config/experiments/zsre.yaml --eval_limit 50
+```
+
+`50` 是每个评测任务的上限：常识 8×50、数学 GSM8K/MATH 各 50、zsRE 8×50。这是接口/格式诊断，不是正式全量成绩。Base 为第 0 轮，因此原生常识补充仅在显式 `--commonsense_native_eval always` 时运行；默认只检查生成评分。
+
+结果位于 `exp/base/<task>/<dataset>/base_evaluation/<profile>/`。`predictions/<task>.jsonl` 包含原始 prompt、模型输出、提取答案、参考答案及正确性；`latest_diagnostic.json` 指向最近完成的小规模诊断。结果按模型、数据、源码、生成参数和样本上限隔离缓存，恢复运行会复用已完成任务；被改动的预测文件会触发校验错误。
+
+抽查时区分“模型没有给出唯一答案”和“代码提取失败”。例如裸输出 `answer1/answer2/answer3` 没有明确选择，按当前规则返回 null；不能从中借助参考答案选一个。数学还应检查推理是否在 `max_new_tokens` 处被截断。
+
+当前常识提示可能让未微调 Base 复述标签列表，导致生成准确率同时受知识能力和格式遵循影响。正式比较时应检查有效标签率，并保留原生选择题对照。若决定强化“只选一个标签”的指令，必须同时修改训练和生成评估的提示，并作为新协议启动实验。
+
+GSM8K 对明确最终答案支持 Markdown 加粗、货币/百分号和单位，例如 `Final Answer: **3 bolts**`、`\boxed{60\%}`；拒绝多个候选数字或未计算的表达式。MATH 继续使用固定 harness 的字符串规范化，不做任意符号等价证明，因此部分写法不同的等价代数式仍可能判错。
+
+2026-10-21 的真实 Base 检查还发现：部分 Transformers 版本会将模型自带 `do_sample=true` 合并进调用者的 GenerationConfig。当前常识和数学生成已显式使用 `use_model_defaults=False`，保证声明的 greedy 协议生效；zsRE 原先已有此设置。修复前的相关生成式评分需在新实现缓存下重评，不应混入新的正式对比。
+
+## 训练输出与评估协议
 
 自动输出到 `exp/shared/<task>/<dataset>/<alg>/`，包括训练日志、断点、轮次快照和评估结果。新实验可通过 `--suffix` 指定不同目录。数据、模型或训练代码不一致时，断点校验会拒绝续跑。
 

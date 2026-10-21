@@ -63,6 +63,8 @@ FedExP          --ca_lambda 0 --ca_eta_mode fedexp
 
 **MetaMathQA：** 协议为 `math_chat_greedy_training_prompt_v4`。评估 user 内容与训练一致，不额外添加 boxed 指令；接受 boxed 和 `The answer is: ...` 等明确结尾，包括 `$18$.` 这种数学定界符后带句号的形式。GSM8K 进行精确数值/分数比较，MATH 使用固定 harness 的字符串规范化比较。该评分不提供任意符号等价证明。主指标为 GSM8K 和 MATH exact match 的宏平均，同时保存各自分数。
 
+三个生成式评估都显式关闭模型默认生成配置合并：`use_model_defaults=False`，并设置 `do_sample=False`。这防止本地 Qwen 的采样默认值覆盖 greedy；固定 EOS 为 tokenizer 的 EOS。新旧评分由实现源码摘要区分缓存，修复前受采样覆盖影响的生成式结果应重新评分。该修复不改变训练目标、各论文算法或训练身份。
+
 Local-only 的常识和 zsRE 模型评估对应的来源/客户端测试集；数学每个客户端评估 GSM8K 和 MATH。它与全局模型覆盖全部任务的范围不同，结果保留客户端标识。
 
 ## 断点与实验版本

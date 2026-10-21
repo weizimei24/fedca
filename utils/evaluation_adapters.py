@@ -57,7 +57,8 @@ def boxed_answer(text):
 def numeric_answer(text):
     text = str(text).strip()
     while True:
-        stripped = text.rstrip('.').strip().strip('$').strip()
+        stripped = text.rstrip('.').strip().strip('*_').strip().replace(r'\$', '$')
+        stripped = stripped.removesuffix(r'\%').removesuffix('%').strip().strip('$').strip()
         if stripped == text:
             break
         text = stripped
@@ -78,6 +79,40 @@ def numeric_answer(text):
     return str(value) if '/' in text else text
 
 
+def gsm_explicit_answer(text):
+    """Read one numeric answer, tolerating presentation and written units.
+
+    Bold answers take precedence over incidental numbers in surrounding prose.
+    Reject multiple numbers and unevaluated expressions; never consult the gold.
+    """
+    answer = numeric_answer(text)
+    if answer is not None:
+        return answer
+    if re.search(r'\b(?:or|not|maybe)\b', text, re.I):
+        return None
+
+    def single_number(candidate):
+        pattern = r'(?<![\w.])[+-]?(?:\\(?:dfrac|tfrac|frac)\{[+-]?\d+\}\{[+-]?\d+\}|(?:\d[\d,]*(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*/\s*[+-]?\d+)?)'
+        matches = list(re.finditer(pattern, candidate))
+        if len(matches) != 1:
+            return None
+        match = matches[0]
+        remainder = candidate[:match.start()] + candidate[match.end():]
+        remainder = remainder.replace(r'\$', '').replace(r'\%', '')
+        if re.search(r'[\\=+*/^{}<>]|\b(?:or|not|maybe)\b', remainder, re.I):
+            return None
+        return numeric_answer(match.group())
+
+    bold = [single_number(part) for part in re.findall(r'\*\*([^*]+)\*\*', text)]
+    values = {value for value in bold if value is not None}
+    if len(values) == 1:
+        outside = re.sub(r'\*\*([^*]+)\*\*', '', text)
+        return None if re.search(r'[=+*/^{}<>\\]', outside) else values.pop()
+    if values:
+        return None
+    return single_number(text)
+
+
 def final_math_answer(text, task, math_utils=None):
     if task == 'gsm8k':
         box = boxed_answer(text)
@@ -87,9 +122,9 @@ def final_math_answer(text, task, math_utils=None):
             return None  # Incomplete/truncated box, not an intermediate number.
         if '####' in text:
             return numeric_answer(text.rsplit('####', 1)[-1])
-        final = re.search(r'(?:the (?:final )?answer is|final answer)\s*:?\s*(.+)', text, re.I)
-        if final:
-            return numeric_answer(final.group(1))
+        finals = list(re.finditer(r'(?:the (?:final )?answer is|final answer)\s*:?\s*(.+)', text, re.I))
+        if finals:
+            return gsm_explicit_answer(finals[-1].group(1))
         numbers = re.findall(r'[+-]?\d[\d,]*(?:\.\d+)?(?:\s*/\s*[+-]?\d+)?', text)
         return numeric_answer(numbers[-1]) if numbers else None
     utils = math_utils or math_utilities()
@@ -126,7 +161,7 @@ def generate_math(model, tokenizer, rows, task, args):
                 generated = model.generate(**inputs, generation_config=GenerationConfig(
                     do_sample=False, max_new_tokens=args.max_new_tokens,
                     eos_token_id=tokenizer.eos_token_id, pad_token_id=tokenizer.pad_token_id,
-                    bos_token_id=tokenizer.bos_token_id, use_cache=True))
+                    bos_token_id=tokenizer.bos_token_id, use_cache=True), use_model_defaults=False)
             completions = generated[:, inputs['input_ids'].shape[1]:]
             for row, tokens in zip(batch, completions):
                 text = tokenizer.decode(tokens, skip_special_tokens=True)
@@ -186,7 +221,8 @@ def generate_commonsense(model, tokenizer, rows, args):
             with torch.inference_mode():
                 tokens = model.generate(**inputs, generation_config=GenerationConfig(
                     do_sample=False, max_new_tokens=limit, eos_token_id=tokenizer.eos_token_id,
-                    pad_token_id=tokenizer.pad_token_id, bos_token_id=tokenizer.bos_token_id, use_cache=True))
+                    pad_token_id=tokenizer.pad_token_id, bos_token_id=tokenizer.bos_token_id, use_cache=True),
+                    use_model_defaults=False)
             for row, completion in zip(batch, tokens[:, inputs['input_ids'].shape[1]:]):
                 text = tokenizer.decode(completion, skip_special_tokens=True)
                 answer = commonsense_answer(text, row['choice_labels'])

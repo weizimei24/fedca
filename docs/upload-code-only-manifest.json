@@ -10,7 +10,8 @@
   "groups": {
     "entrypoints": [
       "main.py",
-      "eval_zsre.py"
+      "eval_zsre.py",
+      "tools/eval_base.py"
     ],
     "shared_algorithms": [
       "alg/__init__.py",
@@ -120,7 +121,8 @@
       "tests/test_zsre_extra_lora.py",
       "tests/test_rolora_zsre.py",
       "tests/test_fedfh.py",
-      "tests/test_review_fixes.py"
+      "tests/test_review_fixes.py",
+      "tests/test_base_eval.py"
     ],
     "documentation_and_upload_instructions": [
       "README.md",
