@@ -168,13 +168,13 @@ def _autocast(device: torch.device):
     return nullcontext()
 
 
-def _batches(rows, indices: Sequence[int], batch_size: int, device, dynamic_padding=False):
+def _batches(rows, indices: Sequence[int], batch_size: int, device, dynamic_padding=False, pad_token_id=0):
     for start in range(0, len(indices), batch_size):
         chunk = rows[list(indices[start:start + batch_size])]
         if dynamic_padding:
             from utils.runtime_utils import collate
             records = [{'input_ids': ids, 'labels': labels} for ids, labels in zip(chunk['input_ids'], chunk['labels'])]
-            batch = collate(records, pad_id=0, device=device)
+            batch = collate(records, pad_id=pad_token_id, device=device)
             yield batch['input_ids'], batch['attention_mask'], batch['labels']
             continue
         input_ids = torch.tensor(chunk["input_ids"], device=device)
@@ -187,7 +187,7 @@ def _batches(rows, indices: Sequence[int], batch_size: int, device, dynamic_padd
 @torch.no_grad()
 def probe_measure(model, rows, indices: Sequence[int], teacher_state: Mapping[str, torch.Tensor],
                   candidates: Mapping[str, Mapping[str, torch.Tensor]], batch_size: int = 8,
-                  tau: float = 1.0, dynamic_padding: bool = False) -> dict:
+                  tau: float = 1.0, dynamic_padding: bool = False, pad_token_id: int = 0) -> dict:
     """Answer CE and excess (not-true KL to the teacher) for candidate adapters.
 
     Returns token-averaged values: ``{"teacher_ce": float, "ce": {name: float},
@@ -202,17 +202,18 @@ def probe_measure(model, rows, indices: Sequence[int], teacher_state: Mapping[st
     tokens = 0
     model.eval()
     try:
-        for input_ids, attention_mask, labels in _batches(rows, indices, batch_size, device, dynamic_padding):
+        forward_options = {'use_cache': False} if dynamic_padding else {}
+        for input_ids, attention_mask, labels in _batches(rows, indices, batch_size, device, dynamic_padding, pad_token_id):
             assign_lora(params, teacher_state)
             with _autocast(device):
-                teacher_logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
+                teacher_logits = model(input_ids=input_ids, attention_mask=attention_mask, **forward_options).logits
             count = int(labels[:, 1:].ne(-100).sum())
             tokens += count
             totals["teacher_ce"] += float(answer_ce(teacher_logits, labels, reduction="sum"))
             for name, state in candidates.items():
                 assign_lora(params, state)
                 with _autocast(device):
-                    logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
+                    logits = model(input_ids=input_ids, attention_mask=attention_mask, **forward_options).logits
                 totals["ce"][name] += float(answer_ce(logits, labels, reduction="sum"))
                 totals["excess"][name] += float(not_true_kl(logits, teacher_logits, labels, tau, reduction="sum", compact=dynamic_padding))
     finally:

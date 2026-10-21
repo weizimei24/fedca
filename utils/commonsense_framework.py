@@ -13,7 +13,7 @@ from pathlib import Path
 import torch
 
 from utils.commonsense_training import (DOMAINS, TRAIN_PROTOCOL, CheckpointStore, adapter_state,
-    atomic_json, atomic_torch, cpu_tree, encode_example, fingerprint, load_adapter, sha256)
+    atomic_json, atomic_torch, cpu_tree, encode_example, fingerprint, load_adapter, sha256, source_sha256, evaluation_rounds)
 from utils.commonsense_eval import build_task, ensure_runtime, evaluate_round
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,15 +22,6 @@ FRAMEWORK_PROTOCOL = 'fedsim_commonsense_v1'
 
 def read_json(path):
     return json.loads(Path(path).read_text(encoding='utf-8'))
-
-
-def evaluation_rounds(args):
-    if args.eval_rounds:
-        rounds = sorted(set(int(x) for x in args.eval_rounds.split(',')))
-        if not rounds or min(rounds) < 1 or max(rounds) > args.rnd:
-            raise ValueError('eval_rounds must be within 1..rnd')
-        return rounds
-    return sorted(set(range(args.test_gap, args.rnd+1, args.test_gap)) | {args.rnd})
 
 
 def validate_args(args):
@@ -130,7 +121,7 @@ def prepare_framework(args):
                      'dataset_manifest_sha256': sha256(dataset / 'manifest.json'),
                      'model_files': model_fingerprint(model_path),
                      'packages': {name: importlib.metadata.version(name) for name in ('torch', 'transformers', 'peft', 'numpy')},
-                     'code': {name: sha256(ROOT / name) for name in source_files}}
+                     'code': {name: source_sha256(ROOT / name) for name in source_files}}
     from utils.commonsense_fedca import preserve_baseline_identity
     identity_spec = preserve_baseline_identity(Path(args.suffix), identity_spec)
     identity = fingerprint(identity_spec)

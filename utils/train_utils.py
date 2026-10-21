@@ -201,13 +201,18 @@ class Trainer:
                         or self.client.server.commonsense_run)
         active = continuation.active_for(self.client)
         start_epoch, start_batch, updates = 0, 0, 0
-        loss_sum, count, examples = 0.0, 0, 0
+        device = next(model.parameters()).device
+        # Float64 preserves the previous Python-float accumulation order while
+        # keeping loss statistics on-device between checkpoint boundaries.
+        loss_sum = torch.zeros((), dtype=torch.float64, device=device)
+        count, examples = 0, 0
         if active is not None:
             load_adapter(model, active['adapter'])
             optimizer.load_state_dict(active['optimizer'])
             scaler.load_state_dict(active['scaler'])
             start_epoch, start_batch = active['epoch'], active['next_batch']
-            updates, loss_sum = active['updates'], active['loss_sum']
+            updates = active['updates']
+            loss_sum = torch.as_tensor(active['loss_sum'], dtype=torch.float64, device=device).clone()
             count, examples = active['batch_count'], active['examples']
             print(f"Resume round {self.client.server.round+1} client {self.client.id}: "
                   f"epoch {start_epoch}, batch {start_batch}, optimizer step {updates}", flush=True)
@@ -230,15 +235,17 @@ class Trainer:
                 restore_rng(active['rng'])
             while cursor < len(self.train_loader) and (self.args.step <= 0 or updates < self.args.step):
                 window = min(self.args.grad_accum, len(self.train_loader) - cursor)
+                finite = torch.ones((), dtype=torch.bool, device=device)
                 for _ in range(window):
                     batch = next(iterator)
                     loss = self._forward(model, batch)
-                    if not torch.isfinite(loss):
-                        raise FloatingPointError('Nonfinite training loss')
-                    loss_sum += loss.detach().float().item()
+                    finite.logical_and_(torch.isfinite(loss.detach()))
+                    loss_sum += loss.detach().float().to(torch.float64)
                     count += 1
                     examples += batch['input_ids'].shape[0]
                     scaler.scale(loss / window).backward()
+                if not bool(finite):
+                    raise FloatingPointError('Nonfinite training loss')
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
@@ -248,7 +255,7 @@ class Trainer:
                 if updates % self.args.checkpoint_steps == 0 or finished:
                     checkpoint = {'client_id': self.client.id, 'round_index': self.client.server.round,
                                   'epoch': epoch, 'next_batch': cursor, 'updates': updates,
-                                  'loss_sum': loss_sum, 'batch_count': count, 'examples': examples,
+                                  'loss_sum': loss_sum.detach().cpu().clone(), 'batch_count': count, 'examples': examples,
                                   'adapter': adapter_state(model), 'optimizer': cpu_tree(optimizer.state_dict()),
                                   'scaler': scaler.state_dict(), 'rng': capture_rng()}
                     continuation.checkpoint_active(self.client, checkpoint)
@@ -258,10 +265,11 @@ class Trainer:
                 break
         if count == 0:
             raise RuntimeError('Training DataLoader produced no batches')
-        self.last_train_metrics = {'client_id': self.client.id, 'mean_loss': loss_sum/count,
+        mean_loss = loss_sum.item() / count
+        self.last_train_metrics = {'client_id': self.client.id, 'mean_loss': mean_loss,
                                    'batches': count, 'optimizer_steps': updates, 'examples': examples,
                                    'lr': self.args.lr * 0.99 ** self.client.server.round}
-        return loss_sum / count
+        return mean_loss
 
     def _train_loop_windowed(self, model, optimizer, scaler, start_time, window_end_time, resume_step: int = 0, delay: float = 1.0):
         accumulation_steps = self.args.grad_accum

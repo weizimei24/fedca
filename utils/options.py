@@ -28,7 +28,7 @@ def build_parser(*, max_new_tokens_default=1024) -> argparse.ArgumentParser:
     # Parse this one option first so a dataset-specific YAML can supply all
     # ordinary defaults without modifying the repository-wide config.yaml.
     config_parser = argparse.ArgumentParser(add_help=False)
-    config_parser.add_argument('--config', default='config.yaml')
+    config_parser.add_argument('--config', required=True, help='path to an explicit task YAML')
     config_args, _ = config_parser.parse_known_args()
     config_path = Path(config_args.config)
     if not config_path.is_file():
@@ -80,6 +80,9 @@ def build_parser(*, max_new_tokens_default=1024) -> argparse.ArgumentParser:
     parser.add_argument('--eval_rounds', '--eval-rounds', default='')
     parser.add_argument('--eval_limit', '--eval-limit', type=int)
     parser.add_argument('--eval_max_length', '--eval-max-length', type=int, default=4096)
+    parser.add_argument('--commonsense_eval', choices=('generation', 'native'), default='generation',
+                        help='primary Commonsense metric; both generation and native MC are evaluated')
+    parser.add_argument('--commonsense_max_new_tokens', type=int, default=32)
     parser.add_argument('--max_length', '--max-length', type=int, default=1536)
     parser.add_argument('--check_only', '--check-only', action='store_true')
     parser.add_argument('--gradient_checkpointing', action=argparse.BooleanOptionalAction, default=False)

@@ -4,6 +4,7 @@ New datasets use runtime_utils and dataset_adapters; this module keeps old
 public imports stable without maintaining another checkpoint implementation.
 """
 from utils.runtime_utils import *  # noqa: F401,F403
+from utils.dataset_adapters import DOMAINS, TRAIN_PROTOCOL
 
 
 def encode_example(tokenizer, row, max_length):

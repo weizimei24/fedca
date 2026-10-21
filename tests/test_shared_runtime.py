@@ -78,7 +78,7 @@ class SharedRuntimeTest(unittest.TestCase):
                 raise Interrupted()
             random.random()
             torch.rand(3)
-            metric = {'commonsense170k': 'acc,none', 'zsre': 'em', 'metamathqa': 'exact_match'}[task]
+            metric = DATASETS[task].primary_metric
             return {'metrics': {metric: 0.5}, 'num_samples': 1}
 
         previous = Path.cwd()
@@ -160,7 +160,7 @@ class SharedRuntimeTest(unittest.TestCase):
                 rng = capture_rng()
                 # Force a new diagnostic evaluation of a historical snapshot.
                 server.args.eval_limit = 1
-                with patch('utils.experiment.evaluate_task', return_value={'metrics': {'acc,none': 0.5}}), \
+                with patch('utils.experiment.evaluate_task', return_value={'metrics': {'generation_accuracy': 0.5}}), \
                      patch('utils.experiment.importlib.metadata.version', return_value='test'):
                     server.experiment_run.evaluate(1)
                 self.assertTrue(same_tensors(before, server.export_state()))
@@ -275,7 +275,12 @@ class SharedRuntimeTest(unittest.TestCase):
 
     def test_math_scoring_uses_pinned_normalization_and_generation_records(self):
         from utils.evaluation_adapters import math_utilities, final_math_answer, generate_math
-        utils = math_utilities()
+        try:
+            utils = math_utilities()
+        except RuntimeError as exc:
+            if 'install' not in str(exc) and 'lm_eval' not in str(exc):
+                raise
+            self.skipTest(str(exc))
         self.assertEqual(final_math_answer('reasoning \\boxed{\\frac{1}{2}}', 'math', utils), r'\frac{1}{2}')
         self.assertTrue(utils.is_equiv(r'\frac12', r'\frac{1}{2}'))
         self.assertIsNone(final_math_answer('no final answer', 'math', utils))

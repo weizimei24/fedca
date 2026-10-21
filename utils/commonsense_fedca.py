@@ -34,9 +34,9 @@ def preserve_baseline_identity(output, current):
     reviewed = {}
     dependencies = {}
     if compatibility.exists():
-        from utils.runtime_utils import sha256
+        from utils.runtime_utils import source_sha256
         record = read_json(compatibility)
-        if all((root / path).is_file() and sha256(root / path) == digest
+        if all((root / path).is_file() and source_sha256(root / path) == digest
                for path, digest in record['dependencies'].items()):
             reviewed = record['sources']
             dependencies = record['dependencies']

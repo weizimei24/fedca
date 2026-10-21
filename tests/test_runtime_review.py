@@ -100,7 +100,7 @@ class RuntimeReviewTest(unittest.TestCase):
             helper.simulate(root, 'fedit', rounds=1)
             path = next((root / 'exp/test/evaluation/round_001').glob('*/boolq.json'))
             record = json.loads(path.read_text())
-            record['metrics']['acc,none'] = 1.0
+            record['metrics']['generation_accuracy'] = 1.0
             path.write_text(json.dumps(record))
             with self.assertRaisesRegex(ValueError, 'cache'):
                 helper.simulate(root, 'fedit', rounds=1, eval_only=True)

@@ -1,8 +1,12 @@
 {
   "schema_version": 1,
-  "scope": ["zsre", "commonsense170k", "metamathqa"],
+  "scope": [
+    "zsre",
+    "commonsense170k",
+    "metamathqa"
+  ],
   "path_base": "source project root",
-  "instruction": "Copy every explicitly listed file, preserving relative paths, into a new empty directory. Then apply root_file_copies. Initialize a NEW Git history in that directory. Do not copy the original .git directory or any directory recursively.",
+  "instruction": "Copy every explicitly listed source file into an empty staging directory, preserving relative paths, then apply root_file_copies. Never copy the source .git or any directory recursively. For an existing destination repository preserve its history and update managed files; initialize new Git history only for a new empty repository. Retire only the explicitly named old documentation after verifying it belongs to the previous export.",
   "groups": {
     "entrypoints": [
       "main.py",
@@ -115,25 +119,22 @@
       "tests/test_resume_fedca.py",
       "tests/test_zsre_extra_lora.py",
       "tests/test_rolora_zsre.py",
-      "tests/test_fedfh.py"
+      "tests/test_fedfh.py",
+      "tests/test_review_fixes.py"
     ],
     "documentation_and_upload_instructions": [
-      "README.federated-method-status.md",
-      "docs/README.shared-training.md",
-      "docs/README.reasoning-data.md",
-      "docs/README.commonsense-training.md",
-      "docs/README.zsre.md",
-      "docs/README.fedca.md",
-      "docs/REVIEW.shared-runtime.md",
-      "docs/README.code-only.md",
+      "README.md",
+      "docs/METHODS.md",
+      "docs/DATA.md",
       "docs/code-only.gitignore",
-      "docs/UPLOAD.code-only.md",
       "docs/upload-code-only-manifest.json"
     ]
   },
   "root_file_copies": [
-    {"source": "docs/README.code-only.md", "destination": "README.md"},
-    {"source": "docs/code-only.gitignore", "destination": ".gitignore"}
+    {
+      "source": "docs/code-only.gitignore",
+      "destination": ".gitignore"
+    }
   ],
   "excluded": [
     "All original Git history (.git/)",
@@ -143,5 +144,16 @@
     "All models, tokenizers downloaded with models, adapters, optimizer states and checkpoint tensors",
     ".runtime/, caches, Python environments, editor state and .env credentials",
     "Unlisted algorithms, configurations, dataset utilities, root scripts and historical diagnostics"
+  ],
+  "retired_documentation": [
+    "README.federated-method-status.md",
+    "docs/README.shared-training.md",
+    "docs/README.reasoning-data.md",
+    "docs/README.commonsense-training.md",
+    "docs/README.zsre.md",
+    "docs/README.fedca.md",
+    "docs/REVIEW.shared-runtime.md",
+    "docs/README.code-only.md",
+    "docs/UPLOAD.code-only.md"
   ]
 }

@@ -7,11 +7,12 @@ from utils.time_utils import time_record
 class Client(FTBaseClient):
     @time_record
     def run(self, model):
-        for param in model.parameters():
-            param.requires_grad = False
-        for name, param in model.named_parameters():
-            if 'lora_B' in name:
-                param.requires_grad = True
+        if not getattr(getattr(self, 'args', None), '_shared', False):
+            for param in model.parameters():
+                param.requires_grad = False
+            for name, param in model.named_parameters():
+                if 'lora_B' in name:
+                    param.requires_grad = True
         self.last_train_loss = self.trainer.train(model)
         self.lora = {
             key: value.clone()

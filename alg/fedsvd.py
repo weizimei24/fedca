@@ -9,14 +9,12 @@ class Client(FTBaseClient):
     def run(self, model):
         client_model = model
 
-        # freeze all parameters first
-        for param in client_model.parameters():
-            param.requires_grad = False
-
-        # then unfreeze lora_B
-        for name, param in client_model.named_parameters():
-            if "lora_B" in name:
-                param.requires_grad = True
+        if not getattr(getattr(self, 'args', None), '_shared', False):
+            for param in client_model.parameters():
+                param.requires_grad = False
+            for name, param in client_model.named_parameters():
+                if "lora_B" in name:
+                    param.requires_grad = True
 
         self.last_train_loss = self.trainer.train(client_model)
         self.lora = {k: v.clone() for k, v in client_model.state_dict().items() if 'lora_B' in k}

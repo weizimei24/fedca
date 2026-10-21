@@ -12,7 +12,7 @@ python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg
 python -X utf8 -u main.py --config config/experiments/metamathqa.yaml --alg fedit
 ```
 
-统一流程支持：`fedit`、`centralized`、`localonly`、`fedca`、`ffalora`、`fedsvd`、`fedexlora`、`fedrotlora`、`flexlora`、`fedmomentum`。默认训练 30 轮，每 5 轮评估，最后一轮也评估；通过 `--rnd` 和 `--test_gap` 覆盖。方法实现及协议限制见 [统一训练说明](docs/README.shared-training.md) 和 [方法状态](README.federated-method-status.md)。
+统一流程支持：`fedit`、`centralized`、`localonly`、`fedca`、`ffalora`、`fedsvd`、`fedexlora`、`fedrotlora`、`flexlora`、`fedmomentum`。默认训练 30 轮，每 5 轮评估，最后一轮也评估；通过 `--rnd` 和 `--test_gap` 覆盖。方法、协议和恢复机制见 [方法说明](docs/METHODS.md)，数据来源与处理见 [数据说明](docs/DATA.md)。这三份是当前使用文档。
 
 三种任务共用 `main.py → alg.Server/Client → utils.train_utils.Trainer`。公共生命周期位于 `utils/experiment.py`，数据和评估差异分别位于 `utils/dataset_adapters.py`、`utils/evaluation_adapters.py`。
 
@@ -45,7 +45,7 @@ python -X utf8 -u tools/prepare_reasoning_data.py --experiment commonsense170k -
 python -X utf8 -u tools/validate_reasoning_data.py --experiment commonsense170k --cap 1000
 ```
 
-默认处理命令生成完整集及每客户端至多 4000 条版本；后两条补充当前常识训练默认使用的每客户端 1000 条均衡版本。数据来源、客户端映射和清洗规则见 [数据准备说明](docs/README.reasoning-data.md)。文中数据产物链接在完成本地准备后才可用。
+默认处理命令生成完整集及每客户端至多 4000 条版本；后两条补充当前常识训练默认使用的每客户端 1000 条均衡版本。数据来源、客户端映射和清洗规则见 [数据说明](docs/DATA.md)。
 
 zsRE 的下载、处理、校验及集中式数据池：
 
@@ -73,7 +73,13 @@ python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg
 
 自动输出到 `exp/shared/<task>/<dataset>/<alg>/`，包括训练日志、断点、轮次快照和评估结果。新实验可通过 `--suffix` 指定不同目录。数据、模型或训练代码不一致时，断点校验会拒绝续跑。
 
-评估分别采用：常识八个原生选择题基准的固定 harness 协议；zsRE 短答案生成及 EM/F1/containment；数学 GSM8K 数值比较与 MATH 的固定 harness 字符串规范化比较。详细协议及 Local-only 的评估范围见统一训练说明。
+常识主评估使用与训练相同的 chat 提示，生成答案词后匹配，记录八个来源的 `generation_accuracy` 宏平均；同轮补充原生 lm-eval 0-shot 选择题准确率。`--commonsense_max_new_tokens 32` 控制答案生成预算。
+
+zsRE 使用短答案生成及 EM/F1/containment；数学使用 GSM8K 数值比较及 MATH 的固定 harness 字符串规范化比较，并接受 `The answer is: ...` 格式。数学评估提示不额外要求 boxed，与训练 user 内容保持一致。详细协议和 Local-only 范围见方法说明。
+
+2026-10-21 更新会改变共享训练源码身份及评估协议。旧 shared 实验继续使用原版本续训，新实验使用新 suffix；新生成准确率不能与旧原生选择题分数直接混比。
+
+FedEx-LoRA/FedMomentum 的中途断点引用初始/轮次基础层快照，迁移断点需同时保留 `resume/`、`initial/` 和 `round_*/`。共享身份不再绑定 GPU 编号，但仍校验模型内容、数据、训练设置、代码和关键包版本。
 
 ## 旧入口
 
@@ -82,3 +88,11 @@ python -X utf8 -u main.py --config config/experiments/commonsense170k.yaml --alg
 旧说明中的 `--config config.zsre_*.yaml` 路径应写成 `--config config/config.zsre_*.yaml`，`requirements-zsre.txt` 应写成 `requirements/requirements-zsre.txt`。旧文档中的实验产物路径只表示运行时输出位置，并不表示仓库附带这些文件。
 
 新仓库根 `.gitignore` 排除所有实验输出；它优先于旧文档中“保留日志/指标”的历史描述。根目录未分发旧的通用 `config.yaml`，因此每次运行必须显式给出任务配置。
+
+## 测试
+
+```bash
+python -X utf8 -m unittest discover -s tests -v
+```
+
+大部分回归使用随机微型模型或合成数据，不下载真实权重。依赖本地 Qwen tokenizer、Commonsense 数据的集成测试在资源缺失时跳过；真实 harness 评分需要先安装固定评估依赖。完整恢复测试不代表已经完成正式 30 轮质量实验。

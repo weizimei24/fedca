@@ -14,7 +14,7 @@ from utils.dataset_adapters import prepare_data
 from utils.evaluation_adapters import validate_evaluator, evaluate_task
 from utils.method_state import method_spec, validate_method, active_extras, client_extras, restore_client_extras, restore_tensors
 from utils.runtime_utils import (CheckpointStore, atomic_json, atomic_torch, cpu_tree,
-    fingerprint, sha256, source_sha256, capture_rng, restore_rng)
+    fingerprint, sha256, source_sha256, capture_rng, restore_rng, evaluation_rounds)
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = 'fedsim_shared_v1'
@@ -27,15 +27,6 @@ def use_shared_runtime(args):
     if runtime == 'legacy' and getattr(args, 'task', ''):
         raise ValueError('Dataset task adapters require runtime: shared')
     return runtime == 'shared'
-
-
-def evaluation_rounds(args):
-    if args.eval_rounds:
-        rounds = sorted(set(int(x) for x in args.eval_rounds.split(',')))
-        if not args.eval_only or not rounds or min(rounds) < 1 or max(rounds) > args.rnd:
-            raise ValueError('eval_rounds requires eval_only and rounds within 1..rnd')
-        return rounds
-    return sorted(set(range(args.test_gap, args.rnd + 1, args.test_gap)) | {args.rnd})
 
 
 def normalized(value):
@@ -54,7 +45,7 @@ def prepare_experiment(args):
     if args.global_test or args.cross_domain_qa:
         raise ValueError('Shared runtime obtains evaluation tasks from the dataset adapter')
     for key in ('rnd', 'test_gap', 'bs', 'grad_accum', 'epoch', 'checkpoint_steps',
-                'max_length', 'eval_max_length', 'eval_batch_size', 'max_new_tokens', 'lora_rank', 'lora_alpha'):
+        'max_length', 'eval_max_length', 'eval_batch_size', 'max_new_tokens', 'commonsense_max_new_tokens', 'lora_rank', 'lora_alpha'):
         value = getattr(args, key)
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise ValueError(f'{key} must be a positive integer')
@@ -67,6 +58,8 @@ def prepare_experiment(args):
         raise ValueError('eval_limit must be a positive integer')
     if args.resume not in ('auto', 'never'):
         raise ValueError('resume must be auto or never')
+    if args.commonsense_eval not in ('generation', 'native'):
+        raise ValueError('commonsense_eval must be generation or native')
     evaluation_rounds(args)
     spec = method_spec(args.alg)
     validate_method(args)
@@ -76,7 +69,7 @@ def prepare_experiment(args):
     validate_evaluator(prepared['adapter'], prepared['tasks'])
     settings = {k: getattr(args, k) for k in ('alg', 'cn', 'sr', 'seed', 'deterministic', 'task_type',
         'bs', 'grad_accum', 'epoch', 'step', 'lr', 'lora_rank', 'lora_alpha', 'lora_dropout',
-        'max_length', 'gradient_checkpointing', 'device')}
+        'max_length', 'gradient_checkpointing')}
     settings['method_parameters'] = {k: normalized(getattr(args, k)) for k in spec.parameters if hasattr(args, k)}
     settings.update(lr_decay=0.99, dtype='float16', encoding=prepared['adapter'].encoding)
     from utils.model_utils import local_model_fingerprint
@@ -85,9 +78,10 @@ def prepare_experiment(args):
         'utils/experiment.py', 'utils/runtime_utils.py', 'utils/dataset_adapters.py',
         'utils/method_state.py', 'utils/train_utils.py', 'utils/data_utils.py',
         'utils/model_utils.py', 'utils/seed_utils.py', 'utils/options.py']
-    if args.alg in ('fedca', 'fedsvd', 'fedfh'):
+    if args.alg in ('fedca', 'fedsvd', 'fedfh', 'fedmomentum'):
         sources += {'fedca': ['utils/ca_utils.py'], 'fedsvd': ['alg/flexlora.py'],
-                    'fedfh': ['utils/fh_utils.py', 'alg/flexlora.py']}[args.alg]
+                    'fedfh': ['utils/fh_utils.py', 'alg/flexlora.py'],
+                    'fedmomentum': ['alg/flexlora.py']}[args.alg]
     if prepared['adapter'].name == 'zsre':
         sources += ['utils/zsre_utils.py']
     identity_spec = {'protocol': PROTOCOL, 'training': settings,
@@ -142,7 +136,10 @@ class ExperimentRun:
             self.state = {'format': PROTOCOL, 'completed_rounds': 0, 'pending': {}, 'active': None,
                           'server': server.export_state(), 'rng': capture_rng(), 'wall_clock_time': 0.0,
                           'requested_rounds': args.rnd}
-            self.store.save(self.state)
+            self._set_base_reference(initial=True)
+            self._save_checkpoint()
+        else:
+            self._set_base_reference()
         if self.state['format'] != PROTOCOL or self.completed_rounds > args.rnd:
             raise ValueError('Incompatible checkpoint format or rnd below completed rounds')
         if not manifest.exists():
@@ -158,6 +155,40 @@ class ExperimentRun:
         self.write_progress()
         print(f'Shared continuation: {self.completed_rounds} completed rounds, '
               f'{len(self.state["pending"])} completed clients in next round', flush=True)
+
+    def _set_base_reference(self, initial=False):
+        self._base_reference = None
+        if not self.state['server']['base']:
+            return
+        if self.completed_rounds:
+            folder = self.output / f'round_{self.completed_rounds:03d}'
+            marker = json.loads((folder / 'complete.json').read_text(encoding='utf-8'))
+            path, digest = folder / marker['file'], marker['sha256']
+            if marker['identity'] != self.identity or sha256(path) != digest:
+                raise ValueError('Committed base snapshot identity/checksum differs')
+        else:
+            path = self.output / 'initial/state.pt'
+            payload = {'identity': self.identity, 'round': 0, 'server': self.state['server']}
+            if path.exists():
+                previous = torch.load(path, map_location='cpu', weights_only=True)
+                if not same_tensors(previous, payload):
+                    raise ValueError('Initial base snapshot differs')
+            elif initial:
+                atomic_torch(path, payload)
+            else:
+                # Migration of a complete pre-optimization checkpoint: its
+                # verified embedded base provides the initial immutable blob.
+                atomic_torch(path, payload)
+            digest = sha256(path)
+        self._base_reference = {'file': path.relative_to(self.output).as_posix(), 'sha256': digest,
+            'source_keys': ['server', 'base'], 'destination_keys': ['server', 'base']}
+
+    def _save_checkpoint(self):
+        payload = self.state
+        if self._base_reference is not None:
+            payload = {**self.state, 'server': {**self.state['server'], 'base': {}},
+                       '_tensor_references': [self._base_reference]}
+        self.store.save(payload)
 
     @property
     def completed_rounds(self):
@@ -176,7 +207,7 @@ class ExperimentRun:
     def checkpoint_active(self, client, active):
         active.update(active_extras(client))
         self.state['active'] = active
-        self.store.save(self.state)
+        self._save_checkpoint()
 
     def commit_client(self, client):
         self.state['pending'][str(client.id)] = {'adapter': cpu_tree(client.lora),
@@ -186,7 +217,7 @@ class ExperimentRun:
             self.state['server']['local'][client.id] = cpu_tree(client.lora)
         self.state['active'] = None
         self.state['rng'] = capture_rng()
-        self.store.save(self.state)
+        self._save_checkpoint()
 
     def restore_completed_client(self, client):
         saved = self.state['pending'].get(str(client.id))
@@ -231,7 +262,8 @@ class ExperimentRun:
             'clients': [self.state['pending'][str(c.id)]['metrics'] for c in self.server.clients]})
         self.state.update(completed_rounds=rnd, pending={}, active=None, server=saved,
                           rng=capture_rng(), wall_clock_time=self.server.wall_clock_time)
-        self.store.save(self.state)
+        self._set_base_reference()
+        self._save_checkpoint()
         self.write_progress()
 
     def log_algorithm_round(self, record):
@@ -252,6 +284,8 @@ class ExperimentRun:
             'protocol': adapter.evaluator, 'eval_limit': self.args.eval_limit,
             'batch_size': self.args.eval_batch_size, 'max_length': self.args.eval_max_length,
             'max_new_tokens': self.args.max_new_tokens, 'seed': self.args.seed,
+            'primary_metric': adapter.primary_metric,
+            'commonsense_max_new_tokens': self.args.commonsense_max_new_tokens,
             'implementation': {name: source_sha256(ROOT / name) for name in
                 ('utils/evaluation_adapters.py', 'utils/commonsense_eval.py', 'eval_zsre.py', 'utils/zsre_utils.py')}}
         settings['evaluator_packages'] = {name: importlib.metadata.version(name) for name in adapter.evaluator_packages}
@@ -283,15 +317,27 @@ class ExperimentRun:
                     atomic_json(dest, result)
                 results[name] = result
             metric = adapter.primary_metric
+            primary_results = [result for result in results.values() if metric in result['metrics']]
+            if not primary_results:
+                raise ValueError(f'No evaluation task provides primary metric {metric}')
+            native_results = [result for name, result in results.items() if name.startswith('native_')]
+            generation_results = [result for result in results.values() if 'generation_accuracy' in result['metrics']]
+            supplementary = {}
+            if native_results:
+                supplementary['native_mc_raw_accuracy'] = sum(r['metrics']['acc,none'] for r in native_results) / len(native_results)
+            if generation_results and metric != 'generation_accuracy':
+                supplementary['generation_accuracy'] = sum(r['metrics']['generation_accuracy'] for r in generation_results) / len(generation_results)
             summary = {'settings': settings, 'evaluation_id': evaluation_id,
                 'diagnostic_only': self.args.eval_limit is not None or self.prepared['report'].get('diagnostic_budget', False),
                 'primary_metric_units': 'fraction',
-                'primary_metric': metric, 'macro_average': sum(r['metrics'][metric] for r in results.values()) / len(results),
+                'primary_metric': metric, 'macro_average': sum(r['metrics'][metric] for r in primary_results) / len(primary_results),
+                'supplementary_metrics': supplementary,
                 'per_task': {name: result['metrics'] for name, result in results.items()}}
             atomic_json(output / 'summary.json', summary)
             pointer = 'latest_full.json' if self.args.eval_limit is None else 'latest_diagnostic.json'
             atomic_json(output.parent / pointer, {'summary': str((output / 'summary.json').relative_to(self.output)), **summary})
-            return {f'macro_{metric}': summary['macro_average']}
+            return {f'macro_{metric}': summary['macro_average'],
+                    **{f'macro_{key}': value for key, value in supplementary.items()}}
         finally:
             self.server.restore_state(before)
             restore_rng(rng)

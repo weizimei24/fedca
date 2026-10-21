@@ -9,7 +9,7 @@ with the exact protocol of eval_zsre.py, and writes
 
 Test data is only read here, after training; nothing feeds back into training.
 
-  python -X utf8 -u tools/eval_zsre_rounds.py --config config.zsre_fedca.yaml \
+  python -X utf8 -u tools/eval_zsre_rounds.py --config config/config.zsre_fedca.yaml \
       --suffix zsre8_chat_eos_v2/fedca_suite/fedca --rounds 2,4,6,8,10
 """
 

@@ -16,11 +16,6 @@ import numpy as np
 import torch
 
 
-TRAIN_PROTOCOL = "commonsense_chat_eos_v1"
-DOMAINS = ("boolq", "piqa", "social_i_qa", "hellaswag", "winogrande",
-           "arc_easy", "arc_challenge", "openbookqa")
-
-
 def sha256(path):
     h = hashlib.sha256()
     with Path(path).open("rb") as f:
@@ -126,6 +121,27 @@ class CheckpointStore:
         state = torch.load(path, map_location="cpu", weights_only=True)
         if state["identity"] != self.identity:
             raise ValueError("Checkpoint identity mismatch")
+        # Immutable large tensors may live in a durable initial/round snapshot.
+        # Resolve explicit references only after verifying both byte checksum
+        # and experiment identity. Older self-contained checkpoints still load.
+        for reference in state.pop('_tensor_references', []):
+            root = self.directory.parent.resolve()
+            relative = Path(reference['file'])
+            source = (root / relative).resolve()
+            if relative.is_absolute() or '..' in relative.parts or not source.is_relative_to(root):
+                raise ValueError('Invalid immutable checkpoint reference path')
+            if not source.is_file() or sha256(source) != reference['sha256']:
+                raise ValueError('Immutable checkpoint reference is missing or corrupt')
+            blob = torch.load(source, map_location='cpu', weights_only=True)
+            if blob.get('identity') != self.identity:
+                raise ValueError('Immutable checkpoint reference identity differs')
+            value = blob
+            for key in reference['source_keys']:
+                value = value[key]
+            destination = state
+            for key in reference['destination_keys'][:-1]:
+                destination = destination[key]
+            destination[reference['destination_keys'][-1]] = value
         return state
 
     def save(self, state):
@@ -181,6 +197,16 @@ def factor_average(states, sizes):
         for name, value in state.items():
             out[name] = out.get(name, 0) + value * (size / total)
     return out
+
+
+def evaluation_rounds(args):
+    """Common interval/final-round scheduling for shared and legacy callers."""
+    if args.eval_rounds:
+        rounds = sorted(set(int(value) for value in args.eval_rounds.split(',')))
+        if not getattr(args, 'eval_only', False) or not rounds or min(rounds) < 1 or max(rounds) > args.rnd:
+            raise ValueError('eval_rounds requires eval_only and rounds within 1..rnd')
+        return rounds
+    return sorted(set(range(args.test_gap, args.rnd + 1, args.test_gap)) | {args.rnd})
 
 
 def capture_rng():

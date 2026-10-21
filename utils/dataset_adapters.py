@@ -1,11 +1,14 @@
 """Datasets supply encoding and task definitions, never continuation logic."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 
-from utils.runtime_utils import sha256, DOMAINS
+from utils.runtime_utils import sha256
 
 ROOT = Path(__file__).resolve().parents[1]
+TRAIN_PROTOCOL = 'commonsense_chat_eos_v1'
+DOMAINS = ('boolq', 'piqa', 'social_i_qa', 'hellaswag', 'winogrande',
+           'arc_easy', 'arc_challenge', 'openbookqa')
 
 
 def read_rows(path):
@@ -30,14 +33,13 @@ class DatasetAdapter:
     primary_metric: str
     evaluator_packages: tuple = ()
 
+    def prompt(self, tokenizer, text):
+        return tokenizer.apply_chat_template(
+            [{'role': 'user', 'content': text}], tokenize=True,
+            add_generation_prompt=True, enable_thinking=False)
+
     def encode(self, tokenizer, row, max_length):
-        if self.name == 'zsre':
-            from utils.zsre_utils import encode_zsre_prompt
-            prompt = encode_zsre_prompt(tokenizer, row['input_ids'])
-        else:
-            prompt = tokenizer.apply_chat_template(
-                [{'role': 'user', 'content': row['input_ids']}], tokenize=True,
-                add_generation_prompt=True, enable_thinking=False)
+        prompt = self.prompt(tokenizer, row['input_ids'])
         answer = tokenizer(str(row['label']), add_special_tokens=False)['input_ids']
         if not answer or tokenizer.eos_token_id is None or tokenizer.pad_token_id is None:
             raise ValueError('Nonempty targets and EOS/pad IDs are required')
@@ -48,19 +50,51 @@ class DatasetAdapter:
         return {'input_ids': prompt + target, 'labels': [-100] * len(prompt) + target}
 
     def tasks(self, path):
-        if self.name == 'commonsense170k':
-            return [(domain, path / 'benchmarks' / f'{domain}.jsonl', cid) for cid, domain in enumerate(DOMAINS)]
-        if self.name == 'zsre':
-            return [(f'client_{p.stem}', p, int(p.stem)) for p in sorted((path / 'test').glob('*.jsonl'))
-                    if p.stem.isdigit()]
+        raise NotImplementedError
+
+    def validate_clients(self, files):
+        pass
+
+    def validate_tasks(self, tasks, files):
+        pass
+
+
+class ZsreAdapter(DatasetAdapter):
+    def prompt(self, tokenizer, text):
+        from utils.zsre_utils import encode_zsre_prompt
+        return encode_zsre_prompt(tokenizer, text)
+
+    def tasks(self, path):
+        return [(f'client_{p.stem}', p, int(p.stem)) for p in sorted((path / 'test').glob('*.jsonl'))
+                if p.stem.isdigit()]
+
+    def validate_tasks(self, tasks, files):
+        if sorted(cid for _, _, cid in tasks) != list(range(len(files))):
+            raise ValueError('zsRE evaluation groups must match the original client IDs')
+
+
+class CommonsenseAdapter(DatasetAdapter):
+    def tasks(self, path):
+        generation = [(domain, path / 'test' / f'{cid}.jsonl', cid) for cid, domain in enumerate(DOMAINS)]
+        native = [(f'native_{domain}', path / 'benchmarks' / f'{domain}.jsonl', cid)
+                  for cid, domain in enumerate(DOMAINS)]
+        return generation + native
+
+    def validate_clients(self, files):
+        if len(files) != len(DOMAINS):
+            raise ValueError('Commonsense170K requires eight source clients')
+
+
+class MathAdapter(DatasetAdapter):
+    def tasks(self, path):
         return [(name, path / 'evaluation' / f'{name}.jsonl', None) for name in ('gsm8k', 'math')]
 
 
 DATASETS = {
-    'zsre': DatasetAdapter('zsre', 'zsre_chat_eos_dynamic_v1', 'generation_zsre_v2', 'em'),
-    'commonsense170k': DatasetAdapter('commonsense170k', 'commonsense_chat_eos_v1',
-        'commonsense_native_mc_0shot_v1', 'acc,none', ('lm_eval',)),
-    'metamathqa': DatasetAdapter('metamathqa', 'math_chat_eos_v1', 'math_chat_greedy_boxed_v2',
+    'zsre': ZsreAdapter('zsre', 'zsre_chat_eos_dynamic_v1', 'generation_zsre_v2', 'em'),
+    'commonsense170k': CommonsenseAdapter('commonsense170k', TRAIN_PROTOCOL,
+        'commonsense_chat_generation_plus_native_v2', 'generation_accuracy', ('lm_eval',)),
+    'metamathqa': MathAdapter('metamathqa', 'math_chat_eos_v1', 'math_chat_greedy_training_prompt_v3',
         'exact_match', ('lm_eval',)),
 }
 
@@ -77,7 +111,10 @@ def adapter_for(args):
             name = json.loads(path.read_text(encoding='utf-8'))['experiment']
     if name not in DATASETS:
         raise ValueError(f'No dataset adapter for {name!r}')
-    return DATASETS[name]
+    adapter = DATASETS[name]
+    if name == 'commonsense170k' and getattr(args, 'commonsense_eval', 'generation') == 'native':
+        adapter = replace(adapter, primary_metric='acc,none')
+    return adapter
 
 
 def prepare_data(args, tokenizer):
@@ -97,8 +134,7 @@ def prepare_data(args, tokenizer):
     files = sorted(p for p in (folder / 'train').glob('*.jsonl') if p.stem.isdigit())
     if not files or sorted(int(p.stem) for p in files) != list(range(len(files))):
         raise ValueError('Expected contiguous client train files: 0.jsonl, 1.jsonl, ...')
-    if adapter.name == 'commonsense170k' and len(files) != len(DOMAINS):
-        raise ValueError('Commonsense170K requires eight source clients')
+    adapter.validate_clients(files)
     expected = 1 if args.alg == 'centralized' else len(files)
     if args.cn is None:
         args.cn = expected
@@ -118,8 +154,7 @@ def prepare_data(args, tokenizer):
     tasks = adapter.tasks(folder)
     if not tasks or any(not path.is_file() for _, path, _ in tasks):
         raise ValueError('Missing evaluation tasks/data')
-    if adapter.name == 'zsre' and sorted(cid for _, _, cid in tasks) != list(range(len(files))):
-        raise ValueError('zsRE evaluation groups must match the original client IDs')
+    adapter.validate_tasks(tasks, files)
     if args.alg == 'localonly' and any(cid is None for _, _, cid in tasks):
         # Mathematics has global evaluation sets; each local model evaluates both.
         tasks = [(f'client_{cid}_{name}', path, cid) for cid in range(len(files)) for name, path, _ in tasks]

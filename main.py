@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import numpy as np
 import os
+from pathlib import Path
 
 from utils.logger import get_logger
 from utils.options import args_parser
@@ -15,11 +16,9 @@ class FedSim:
         from utils.experiment import use_shared_runtime
         args._shared = use_shared_runtime(args)
         if args._shared and args.suffix == 'default':
-            from pathlib import Path
             dataset_name = Path(args.dataset).name
             args.suffix = f'shared/{args.task or dataset_name}/{dataset_name}/{args.alg}'
         if args._shared or getattr(args, 'commonsense', False):
-            from pathlib import Path
             from utils.commonsense_training import run_lock
             suffix = Path(args.suffix)
             if suffix.is_absolute() or '..' in suffix.parts:
@@ -51,14 +50,12 @@ class FedSim:
         # === init clients & server ===
         self.clients = [alg_module.Client(idx, args) for idx in tqdm(range(args.cn), desc="Loading clients...")]
         if args._shared and args.check_only:
-            from pathlib import Path
             from utils.runtime_utils import atomic_json
             path = Path(args.suffix) / 'readiness.json'
             atomic_json(path, args._experiment_prepared['report'])
             print(f'Shared framework readiness passed: {path}; no model loaded or training started')
             return
         if getattr(args, 'commonsense', False) and args.check_only:
-            from pathlib import Path
             from utils.commonsense_training import atomic_json
             path = Path('results/data_audits') / f'commonsense_framework_{args.alg}_readiness.json'
             atomic_json(path, args._commonsense_prepared['report'])

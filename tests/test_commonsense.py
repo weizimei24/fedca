@@ -15,6 +15,9 @@ from utils.commonsense_training import (
     CheckpointStore, DOMAINS, adapter_state, factor_average, sha256, atomic_torch, encode_example, collate)
 
 ROOT = Path(__file__).resolve().parents[1]
+COMMONSENSE_DATA = ROOT / 'dataset/commonsense170k_client1000_seed42'
+HAS_COMMONSENSE_DATA = all((COMMONSENSE_DATA / 'benchmarks' / f'{domain}.jsonl').is_file() for domain in DOMAINS)
+HAS_QWEN_TOKENIZER = (ROOT / 'Qwen3-1.7B/tokenizer_config.json').is_file()
 
 
 class TinyCausalModel(torch.nn.Module):
@@ -161,6 +164,7 @@ class CommonsenseTest(unittest.TestCase):
         FTBaseServer.aggregate(server)
         self.assertTrue(torch.equal(server.global_lora["lora_A"], factor_average(states, sizes)["lora_A"]))
 
+    @unittest.skipUnless(HAS_COMMONSENSE_DATA, 'local Commonsense benchmark files are not available')
     def test_native_tasks_use_correct_multiple_input_winogrande(self):
         root = ROOT / "dataset/commonsense170k_client1000_seed42/benchmarks"
         for domain in DOMAINS:
@@ -198,6 +202,8 @@ class CommonsenseTest(unittest.TestCase):
             self.simulate(Path(tmp), 'centralized', rounds=12, step=1)
             self.assertEqual(self.last_evaluation_rounds, [5, 10, 12])
 
+    @unittest.skipUnless(HAS_QWEN_TOKENIZER and (COMMONSENSE_DATA / 'train/1.jsonl').is_file(),
+                         'local Qwen tokenizer and Commonsense training data are not available')
     def test_real_qwen_labels_supervise_complete_answer_eos_and_no_padding(self):
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(ROOT / "Qwen3-1.7B", local_files_only=True)
@@ -216,6 +222,7 @@ class CommonsenseTest(unittest.TestCase):
         self.assertTrue(torch.all(batch["labels"][batch["attention_mask"] == 0] == -100))
         self.assertEqual(batch["input_ids"].shape[1], 1123)
 
+    @unittest.skipUnless(HAS_COMMONSENSE_DATA, 'local Commonsense benchmark files are not available')
     def test_partial_evaluation_resume_local_selection_and_full_limit_separation(self):
         # Real task objects + evaluator boundary replacement: isolate recovery
         # behavior without repeating expensive GPU inference in a unit test.

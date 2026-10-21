@@ -88,19 +88,9 @@ class FTBaseServer(BaseServer):
             self.experiment_run.before_aggregate()
 
     def aggregate(self):
-        from collections import defaultdict
-        aggregated = defaultdict(lambda: 0)
-        data_sum = sum(len(client.dataset['train']) for client in self.sampled_clients)
-        client_weights = {
-            client.id: len(client.dataset['train']) / data_sum
-            for client in self.sampled_clients
-        }
-        for client in self.sampled_clients:
-            model = client.lora
-            for k, v in model.items():
-                aggregated[k] = aggregated[k] + v * client_weights[client.id]
-
-        self.global_lora = aggregated
+        from utils.runtime_utils import factor_average
+        self.global_lora = factor_average([client.lora for client in self.sampled_clients],
+            [len(client.dataset['train']) for client in self.sampled_clients])
         self.model.load_state_dict(self.global_lora, strict=False)
         print("Aggregated model updated.")
 

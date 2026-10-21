@@ -1,85 +1,136 @@
 {
-  "format": "reviewed_legacy_shared_refactor_v1",
+  "format": "reviewed_legacy_shared_refactor_v2",
   "sources": {
     "main.py": {
       "before": "8a08cd63c742fff2706a49bfba3637e36cc569ce2aff058040dbba3be0ca3850",
-      "after": "db6769f664d26dce7c9d3ab7506ca8e9a58bdd4b2e20b25e563b46e2543f7ab7"
+      "after": "c7ac738929269a6e2c7f48cdbb3f84d6acd463e46b23d164a063523695aca36d",
+      "compatible_before": [
+        "5afb9f48919985379327564d86f081dcb67ac639933760985ca6239a258484b1",
+        "db6769f664d26dce7c9d3ab7506ca8e9a58bdd4b2e20b25e563b46e2543f7ab7"
+      ]
     },
     "utils/options.py": {
       "before": "73a8fc3dec045133c58388b3f41b8e21700fab0672a934b077b5b8d9110e60d4",
-      "after": "ede86c3e407e7ec1d076420388dc81c4e270357bb512008e58e18addc941e3de",
+      "after": "b13414f2067da0245cbfbec583fb19be9584cece2bde1011eede1e7d82c2d621",
       "compatible_before": [
+        "97bec91265199dfe46ba9a4ed41e11277b76e98923a69a0f33da644eb376255f",
+        "ede86c3e407e7ec1d076420388dc81c4e270357bb512008e58e18addc941e3de",
         "eebe13fa2558de9cf93c3c7858a852c2cffd3c825fb7f01d224146aa3e345ba2"
       ]
     },
     "utils/data_utils.py": {
       "before": "8b0b98326f0c245b7314dfbaf08151797798fcd145cf6ab7dcd751359426da1f",
-      "after": "83b7ddb9755e165a974e3076685cf25c36423f5db132110acaf220ef8b3374e6"
+      "after": "d5cd34af7575fd064413fdedd8d268e5dfbf850ba58bd4072628fbf94818e0c2",
+      "compatible_before": [
+        "83b7ddb9755e165a974e3076685cf25c36423f5db132110acaf220ef8b3374e6",
+        "d5cd34af7575fd064413fdedd8d268e5dfbf850ba58bd4072628fbf94818e0c2"
+      ]
     },
     "utils/train_utils.py": {
       "before": "125693534b343c543a363c45a04a0b913a541271701c56df39aad74f1520bb6e",
-      "after": "6aaf40f1ba90a70c96ec281eb2c6dab0d206a6b91dd16131f5fd833b1c3ec702"
+      "after": "28a0602c3d867239097291fc0a683c84ea2e00878c5e886637720493f50730f9",
+      "compatible_before": [
+        "6aaf40f1ba90a70c96ec281eb2c6dab0d206a6b91dd16131f5fd833b1c3ec702",
+        "f87b8f8b70cca181ce238e7cffa51618b6965cbbc7ec136aac98a570d767b51d"
+      ]
     },
     "utils/model_utils.py": {
       "before": "e88fe017d859cb746e327defcecfc5a33a86d86df0e991fa832e08b8ab30929b",
-      "after": "37d22c477ad32d559c2199be93d33ce744e5f947038e5cbd807715d27031afa9",
+      "after": "d224cfabdda9d1edca24fd4efbdbaac8e50e79f70faba882aae1e9741719c4d2",
       "compatible_before": [
+        "37d22c477ad32d559c2199be93d33ce744e5f947038e5cbd807715d27031afa9",
         "51c52ccd4627297771fd42a6d898c823ad061433a47696f36555ccbf015eea54",
-        "583d801d026c4e540d787021090f373cf69e5b32dce0f6119a40272962ae21cd"
+        "583d801d026c4e540d787021090f373cf69e5b32dce0f6119a40272962ae21cd",
+        "d224cfabdda9d1edca24fd4efbdbaac8e50e79f70faba882aae1e9741719c4d2"
       ]
     },
     "alg/ftbase.py": {
       "before": "74a6ad4a4044877c5ee8ea01fdd76ad829156fbd3d8d9a8d4bcb881d09379b28",
-      "after": "549961da009dae6955843461308c1d265a0d27b402f67598290954a841fb5566"
+      "after": "6efe8f2f55c63e44dd0526d9ad649fba83735d6c8b82761e56d5f05263b98cf6",
+      "compatible_before": [
+        "549961da009dae6955843461308c1d265a0d27b402f67598290954a841fb5566",
+        "974bef27b00980fab9f900e3db1c57858a2ed38b8079485eb8e5754cb5442dfc"
+      ]
     },
     "alg/centralized.py": {
       "before": "14faf30dc5210105809d58008d6f6bea36bdae31fbacd46c3616ff7c6808aa81",
-      "after": "039deb67f1040cb012c196ff9502314fcb778b15808985de927ecf72c6a71bfb"
+      "after": "99701e4bb532440424465b143eb5b00a2e43bf188f78993947bc98e113368d86",
+      "compatible_before": [
+        "039deb67f1040cb012c196ff9502314fcb778b15808985de927ecf72c6a71bfb",
+        "99701e4bb532440424465b143eb5b00a2e43bf188f78993947bc98e113368d86"
+      ]
     },
     "alg/localonly.py": {
       "before": "5b2b503d35e0424b0cb8a50c308abdab02a158a214e39d7faadd16dcf090a324",
-      "after": "e3aa73ae36171e46e56fed24f3aab9b10d31ee3790783bb159b03d5dfe612153",
+      "after": "c760c51d9210c4677eac78d48a692baa6e420956027a3a6175316fc25ec91ad7",
       "compatible_before": [
-        "81c52ca62b89dca13d8ef4967f284e8f2bc81a36b6c06e576aabb3a40ac37761"
+        "81c52ca62b89dca13d8ef4967f284e8f2bc81a36b6c06e576aabb3a40ac37761",
+        "c760c51d9210c4677eac78d48a692baa6e420956027a3a6175316fc25ec91ad7",
+        "e3aa73ae36171e46e56fed24f3aab9b10d31ee3790783bb159b03d5dfe612153"
       ]
     },
     "alg/fedca.py": {
       "before": "896882ea216722cde58150e2c3117258ffcab924f12d0a53ea2074f7db0cf40c",
-      "after": "387cee1036289664ad9160492502a264547aed843c90acaff19b684838bb287c"
+      "after": "c006db0837b2964843d58bb37140affe08879efe9cff9ce1f9cbf5eafa74f5fb",
+      "compatible_before": [
+        "387cee1036289664ad9160492502a264547aed843c90acaff19b684838bb287c",
+        "53de911011a1f09f6d912a90552d2a605fac68ffe47e8403d0e144d4a37640cf"
+      ]
     },
     "utils/ca_utils.py": {
       "before": "72a202461e68be0c8e16a4062667e6c34c522f302ea16264d0b82272c89316f9",
-      "after": "558bb745b5b8aed5f3617e64c97a1b8ae772919ba4aad93a6da1a34feaf539aa"
+      "after": "b4108062db140058efa0436868016489788dbee78e6fac7ab7e45b294d366e8a",
+      "compatible_before": [
+        "43e692a83f2598e2cb74cb6a14bacffcfe3f6cf88f554bf651f2ede4076e1813",
+        "558bb745b5b8aed5f3617e64c97a1b8ae772919ba4aad93a6da1a34feaf539aa"
+      ]
     },
     "utils/commonsense_training.py": {
       "before": "4716a7364cdd22c698545da898d192d6a98f4d73fac109ea094d411e71e4488b",
-      "after": "4cbec5418e6161e7a5e247837e2470f7659d4b1ab9f1e56a635ddd217f869444"
+      "after": "dad5ea7a4ff529c8767ca8d1dac383f9a608797d4e0a0f276d81886335b01c78",
+      "compatible_before": [
+        "4cbec5418e6161e7a5e247837e2470f7659d4b1ab9f1e56a635ddd217f869444",
+        "8466b5d6dd0d67c5fd078490719e33cc20bc58ad606c07be1a9fa7f5ade99fc4"
+      ]
     },
     "utils/commonsense_framework.py": {
       "before": "b813e7ec3e46cac88aeb642351e994944ea919b2312ba8f36f63849b5255939b",
-      "after": "7a99131b034a5165dc0c56e78be35af30d7a2786ffd5a24d095b41cead041283"
+      "after": "91ea2be6cf387e5a0a4b4c2fb5ee967c429feb61f61ad59f6e3c42cd8ec186a0",
+      "compatible_before": [
+        "5b1f29b6f1b305f2a7f196e04a27987578b9493ed4efb9a3b74139b9d6713097",
+        "7a99131b034a5165dc0c56e78be35af30d7a2786ffd5a24d095b41cead041283"
+      ]
     },
     "utils/commonsense_fedca.py": {
       "before": "b10a5321c821f628a0fbef7d03241c3c176cb389f6bba72dfeda6448cde6ba3e",
-      "after": "3bb2c686f1d29ad8ad6de86044022d40ce91bb9fde3a198950317c345a2289a7",
+      "after": "9d22b49b9c94688d32a6c591cb30046fede2a85f41ba2ff881039a5fb73f77f7",
       "compatible_before": [
-        "64a3560cdc5632a794e0d5680a1c03b88e5ae4fe72a4f5d45d6ec543b28a08d0"
+        "3bb2c686f1d29ad8ad6de86044022d40ce91bb9fde3a198950317c345a2289a7",
+        "64a3560cdc5632a794e0d5680a1c03b88e5ae4fe72a4f5d45d6ec543b28a08d0",
+        "8eb440fdbab8109d77de44202ce686900905fa82f3987aca918cb6fd6eae9229"
       ]
     },
     "utils/seed_utils.py": {
       "before": "ecef05a59bb8a794ddbb7d680244b01fdf5386e9b116c3f2172d28b2a702bf26",
-      "after": "ecef05a59bb8a794ddbb7d680244b01fdf5386e9b116c3f2172d28b2a702bf26"
+      "after": "ecef05a59bb8a794ddbb7d680244b01fdf5386e9b116c3f2172d28b2a702bf26",
+      "compatible_before": [
+        "88c08e796f87ca7a872b7de14eef3fb2cb13c99455dfc4ba1844da2407095d8b"
+      ]
     },
     "alg/fedit.py": {
       "before": "9f24402acba93bf19d97da2ba60628ec3d67e2d75e1e0b5ef712f965818fd722",
-      "after": "9f24402acba93bf19d97da2ba60628ec3d67e2d75e1e0b5ef712f965818fd722"
+      "after": "9f24402acba93bf19d97da2ba60628ec3d67e2d75e1e0b5ef712f965818fd722",
+      "compatible_before": [
+        "5687692561226a392c24bb9561e80762501f209ef6a6cc058097ee81b6ba97c6"
+      ]
     }
   },
   "dependencies": {
-    "utils/runtime_utils.py": "56545024cc51f2fff92a005e15154db9793daf8f9f5a109e62f2f78212ff4ba8",
-    "utils/experiment.py": "a1d19f79f8b2da3f93b28b7f87e6a61293f0a73a72388345dfbd4f965f4f1ee0",
-    "utils/dataset_adapters.py": "4b8309e22a77472d88939b6411f0b813ffd1de58aa25bc991c83293c46b274a2",
-    "utils/evaluation_adapters.py": "6b46898955febe396ca14ca40189f0efae230d718c8892451e02668d6810f0af",
-    "utils/method_state.py": "9e422923b6ad0916981372675782e5c28d98ab97d0b443fbb27314ee137186fd"
-  }
+    "utils/runtime_utils.py": "278beaae7494188d0cfc07de9eebfe8ad9fd6c1de67c0336a242d357bf52ad09",
+    "utils/experiment.py": "4cd25246dfe94d90bdc9a5fae211c8f14bc8e4d91a8e07a8cbfca5d26445f6cd",
+    "utils/dataset_adapters.py": "89120788ff02108d50b8391d851c3ba940d079dd0b358a2b664d5dd0b96e8e00",
+    "utils/evaluation_adapters.py": "ac99f4e29f7aed2f43436142e8d4df495a79f06a62c965fe73e51ab585c27070",
+    "utils/method_state.py": "3b0458de22c6aca20d64273101db8b7a882eefc4edd0a60f2b7679737db1d24a"
+  },
+  "hash_protocol": "after and dependencies use source_sha256 (UTF-8, normalized LF); historical before digests remain exact allowed aliases"
 }

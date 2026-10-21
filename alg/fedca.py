@@ -157,6 +157,7 @@ class CompatibilityTrainer(Trainer):
             attention_mask = torch.stack(batch['attention_mask']).transpose(0, 1).to(model.device)
             labels = torch.stack(batch['labels']).transpose(0, 1).to(model.device)
         lam = float(self.args.ca_lambda)
+        forward_options = {'use_cache': False} if self.dynamic_batches else {}
         teacher_logits = None
         if lam > 0:
             if self.teacher_state is None:
@@ -167,10 +168,10 @@ class CompatibilityTrainer(Trainer):
                 with torch.autocast(device_type='cuda', dtype=torch.float16,
                                     enabled=input_ids.is_cuda):
                     teacher_logits = model(input_ids=input_ids[:, :length],
-                                           attention_mask=attention_mask[:, :length]).logits
+                                           attention_mask=attention_mask[:, :length], **forward_options).logits
                 model.train()
         with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=input_ids.is_cuda):
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, **forward_options)
         ce = outputs.loss
         self._ce_sum = self._ce_sum + ce.detach().float()
         self._count += 1
@@ -214,7 +215,8 @@ class Client(FTBaseClient):
         """Client-side scoring on its own fixed training subset (no test data)."""
         return probe_measure(model, self.dataset['train'], self.probe_indices, teacher_state,
                              candidates, batch_size=int(self.args.ca_probe_bs), tau=float(self.args.ca_tau),
-                             dynamic_padding=bool(getattr(self.args, 'commonsense', False) or getattr(self.args, '_shared', False)))
+                             dynamic_padding=self.trainer.dynamic_batches,
+                             pad_token_id=self.tokenizer.pad_token_id if self.trainer.dynamic_batches else 0)
 
 
 class Server(FTBaseServer):
