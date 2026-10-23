@@ -121,7 +121,23 @@ def final_math_answer(text, task, math_utils=None):
         if '\\boxed' in text or '\\fbox' in text:
             return None  # Incomplete/truncated box, not an intermediate number.
         if '####' in text:
-            return numeric_answer(text.rsplit('####', 1)[-1])
+            tail = text.rsplit('####', 1)[-1].strip()
+
+            # MetaMath 可能同时输出：
+            # #### 18
+            # The answer is: 18
+            # 优先解析最后一个明确的最终答案语句。
+            finals = list(re.finditer(
+                r'\b(?:the (?:final )?answer is|final answer)\s*:?\s*([^\n]+)',
+                tail,
+                re.I,
+            ))
+            if finals:
+                return gsm_explicit_answer(finals[-1].group(1))
+
+            # 否则仅解析 #### 后的第一行，避免把后续文字一起传入。
+            first_line = tail.splitlines()[0] if tail else ''
+            return gsm_explicit_answer(first_line)
         finals = list(re.finditer(r'(?:the (?:final )?answer is|final answer)\s*:?\s*(.+)', text, re.I))
         if finals:
             return gsm_explicit_answer(finals[-1].group(1))
